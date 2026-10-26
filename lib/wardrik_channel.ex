@@ -23,7 +23,7 @@ defmodule WardrikChannel do
   `WardrikChannel.Replies`.
 
   Every channel takes `:token` and `:owner`, whose agents answer there, or its `:installations`,
-  for one app added to many workspaces; `:approvers`, as the channel names people, or `:anyone`;
+  for one app added to many workspaces, `:stored` to keep them in the Wardrik; `:approvers`, as the channel names people, or `:anyone`;
   and `:offering` and `:deciding`, what a room with no agent and someone who may not decide are
   told. Its adapter reads the rest.
 
@@ -82,6 +82,18 @@ defmodule WardrikChannel do
   @doc "Returns the channel `adapter` runs, from the options the Wardrik hands it."
   @spec channel(module(), keyword()) :: Channel.t()
   def channel(adapter, opts), do: Channel.new(adapter, opts)
+
+  @doc """
+  Returns the channel the Wardrik `instance` runs as `name`, for your app's own routes, such as
+  where a chat app sends someone back once it's added to their workspace.
+
+      {:ok, channel} = WardrikChannel.fetch(MyApp.Wardrik, "slack")
+  """
+  @spec fetch(atom(), String.t()) :: {:ok, Channel.t()} | :error
+  def fetch(instance, name) do
+    with {:ok, {adapter, opts}} <- Wardrik.Channel.fetch(instance, name),
+         do: {:ok, Channel.new(adapter, opts)}
+  end
 
   @doc "Returns the channel in the workspace the chat app names `id`, or `:error` where it isn't added there."
   @spec workspace(Channel.t(), String.t()) :: {:ok, Workspace.t()} | :error
@@ -156,7 +168,7 @@ defmodule WardrikChannel do
         %{conversation: conversation, interrupt: interrupt} = waiting,
         answer
       ) do
-    scope = deciding_scope(workspace, member, waiting)
+    scope = Workspace.deciding_scope(workspace, member, conversation, Map.get(waiting, :asked_by))
 
     case answered(scope, conversation, interrupt, answer) do
       {:ok, [decision]} ->
@@ -168,22 +180,6 @@ defmodule WardrikChannel do
       {:error, %Error{message: message}} ->
         {:error, message}
     end
-  end
-
-  defp deciding_scope(workspace, member, waiting) do
-    scope = Workspace.member_scope(workspace, member)
-
-    if asked?(workspace, member, waiting),
-      do: Wardrik.grant(scope, roles: [:approver], resources: [resource(waiting.conversation)]),
-      else: scope
-  end
-
-  defp asked?(workspace, member, waiting),
-    do: Map.get(waiting, :asked_by) == Workspace.principal(workspace, member).id
-
-  defp resource(conversation) do
-    {:ok, resource} = Wardrik.Resource.agent(conversation)
-    resource
   end
 
   defp answered(scope, conversation, interrupt, {:approve, note}),

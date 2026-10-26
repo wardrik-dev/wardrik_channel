@@ -4,6 +4,7 @@ defmodule WardrikChannel.Channel do
   the installations that say where it's added.
   """
 
+  alias WardrikChannel.Installation
   alias WardrikChannel.Installations
 
   @own [
@@ -28,7 +29,7 @@ defmodule WardrikChannel.Channel do
     :deciding,
     :options
   ]
-  defstruct @enforce_keys
+  defstruct [approvers: []] ++ @enforce_keys
 
   @type t() :: %__MODULE__{
           name: String.t(),
@@ -38,6 +39,7 @@ defmodule WardrikChannel.Channel do
           installations: {module(), term()},
           offering: String.t(),
           deciding: String.t(),
+          approvers: [String.t()] | :anyone,
           options: keyword()
         }
 
@@ -50,23 +52,36 @@ defmodule WardrikChannel.Channel do
     name = Keyword.fetch!(opts, :channel)
     named!(name)
     installations = installations!(name, opts)
+    wardrik = Keyword.fetch!(opts, :wardrik)
+    store = WardrikStore.scope(Keyword.fetch!(opts, :store), "wardrik_channel")
 
     %__MODULE__{
       name: name,
-      wardrik: Keyword.fetch!(opts, :wardrik),
+      wardrik: wardrik,
       adapter: adapter,
-      store: WardrikStore.scope(Keyword.fetch!(opts, :store), "wardrik_channel"),
-      installations: installations,
+      store: store,
+      installations: stored(installations, wardrik, store),
       offering: Keyword.get(opts, :offering, offering(name)),
       deciding: Keyword.get(opts, :deciding, deciding()),
+      approvers: Keyword.get(opts, :approvers, []),
       options: Keyword.drop(opts, @own)
     }
   end
 
   @doc "Finds the channel's installation in `workspace`, as the chat app names it."
-  @spec installation(t(), String.t()) :: {:ok, WardrikChannel.Installation.t()} | :error
+  @spec installation(t(), String.t()) :: {:ok, Installation.t()} | :error
   def installation(%__MODULE__{name: name, installations: {module, config}}, workspace),
     do: module.fetch(config, name, workspace)
+
+  @doc "Keeps `installation`, in place of any of the same workspace."
+  @spec install(t(), Installation.t()) :: :ok | {:error, String.t()}
+  def install(%__MODULE__{installations: {module, config}}, installation),
+    do: module.put(config, installation)
+
+  @doc "Forgets the channel's installation in `workspace`, as when the app is taken out of it."
+  @spec uninstall(t(), String.t()) :: :ok
+  def uninstall(%__MODULE__{name: name, installations: {module, config}}, workspace),
+    do: module.delete(config, name, workspace)
 
   defp named!(name) do
     if not Regex.match?(~r/^[a-z][a-z0-9-]*$/, name),
@@ -80,6 +95,9 @@ defmodule WardrikChannel.Channel do
 
   defp installations!(name, opts) do
     case Keyword.take(opts, [:installations, :token]) do
+      [installations: :stored] ->
+        :stored
+
       [installations: {module, _config} = installations] when is_atom(module) ->
         installations
 
@@ -91,6 +109,9 @@ defmodule WardrikChannel.Channel do
               "Give the channel #{name} a token: and an owner:, or its installations:."
     end
   end
+
+  defp stored(:stored, wardrik, store), do: {Installations.Stored, wardrik: wardrik, store: store}
+  defp stored(installations, _wardrik, _store), do: installations
 
   defp offering(name),
     do: "An agent answers here once its definition lists #{name} among its channels."

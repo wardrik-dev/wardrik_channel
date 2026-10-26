@@ -4,7 +4,8 @@ defmodule WardrikChannel.Workspace do
   adapter makes one for each thing it hears, with `WardrikChannel.workspace/2`.
 
   Its people act through Wardrik as themselves. Each may read and message the agents of the
-  installation's owner, and its approvers may decide what those agents wait on. The agents it
+  installation's owner, and its approvers may decide what those agents wait on. Whether someone is
+  an approver is asked of the adapter only as they decide. The agents it
   offers are the owner's whose definitions list the channel among their `channels`.
   """
 
@@ -36,16 +37,38 @@ defmodule WardrikChannel.Workspace do
     Wardrik.as(channel.wardrik, principal, grants)
   end
 
-  @doc """
-  Returns the scope `member` acts in: they read and message the owner's agents, and decide what
-  those agents wait on where they're an approver.
-  """
+  @doc "Returns the scope `member` acts in: they read and message the owner's agents."
   @spec member_scope(t(), Member.t()) :: Wardrik.Scope.t()
   def member_scope(%__MODULE__{channel: channel, installation: installation} = workspace, member) do
-    roles = if approver?(workspace, member), do: [:approver], else: []
     agents = Installation.agents(installation)
-    grants = [Statement.new(roles: [:reader, :messenger | roles], resources: [agents])]
+    grants = [Statement.new(roles: [:reader, :messenger], resources: [agents])]
     Wardrik.as(channel.wardrik, principal(workspace, member), grants)
+  end
+
+  @doc """
+  Returns the scope `member` decides in: an approver decides what the owner's agents wait on, and
+  anyone else only what `conversation` waits on, where they asked for its turn as `asked_by` says.
+  """
+  @spec deciding_scope(t(), Member.t(), String.t(), String.t() | nil) :: Wardrik.Scope.t()
+  def deciding_scope(
+        %__MODULE__{installation: installation} = workspace,
+        member,
+        conversation,
+        asked_by
+      ) do
+    scope = member_scope(workspace, member)
+
+    cond do
+      approver?(workspace, member) ->
+        Wardrik.grant(scope, roles: [:approver], resources: [Installation.agents(installation)])
+
+      asked_by == principal(workspace, member).id ->
+        {:ok, resource} = Wardrik.Resource.agent(conversation)
+        Wardrik.grant(scope, roles: [:approver], resources: [resource])
+
+      true ->
+        scope
+    end
   end
 
   @doc "Returns who `member` is to Wardrik, as `slack:T0123/U024BE7LH`."
