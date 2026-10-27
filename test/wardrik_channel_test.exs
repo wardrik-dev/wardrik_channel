@@ -292,4 +292,51 @@ defmodule WardrikChannelTest do
                Wardrik.Channel.deliver(scope, "chat", "events", body: "{}", headers: %{})
     end
   end
+
+  describe "notices" do
+    test "posts a notice in the room itself, through the owner's workspace", context do
+      notice = %Wardrik.Notice{
+        agent: "acme/digest",
+        kind: :finished,
+        at: DateTime.utc_now(),
+        text: "Done."
+      }
+
+      {:ok, {adapter, opts}} = Wardrik.Channel.fetch(context.wardrik, "chat")
+
+      assert adapter.notify(opts, "#news", notice, ["@maria"]) == :ok
+
+      assert_receive {:delivered,
+                      %Outbound{
+                        room: "#news",
+                        thread: nil,
+                        body: {:notice, ^notice},
+                        approvers: ["@maria"]
+                      } =
+                        outbound}
+
+      assert outbound.installation.owner == "acme"
+
+      assert {:skip, _why} = adapter.notify(opts, "#news", %{notice | agent: "globex/digest"}, [])
+    end
+
+    test "reads a parked turn's calls from its notice" do
+      interrupt = %Wardrik.Interrupt{id: "call_1", name: "echo"}
+
+      notice = %Wardrik.Notice{
+        agent: "acme/triage",
+        kind: :parked,
+        at: DateTime.utc_now(),
+        calls: [%{interrupt: interrupt, arguments: %{"text" => "hi"}}]
+      }
+
+      assert Waiting.from_notice(notice) == [
+               %Waiting{
+                 conversation: "acme/triage",
+                 interrupt: interrupt,
+                 arguments: %{"text" => "hi"}
+               }
+             ]
+    end
+  end
 end

@@ -2,7 +2,7 @@ defmodule WardrikChannel.Installations.Token do
   @moduledoc """
   The one installation a channel's `token:` makes, in whichever workspace that token reaches. It
   takes `:token`, `:owner`, whose agents answer there, and `:approvers`. Adding or forgetting
-  others is refused.
+  others is refused. Found by its owner, its workspace is `*`, whichever the token reaches.
   """
 
   @behaviour WardrikChannel.Installations
@@ -19,6 +19,13 @@ defmodule WardrikChannel.Installations.Token do
        token: Keyword.fetch!(config, :token),
        approvers: Keyword.get(config, :approvers, [])
      }}
+  end
+
+  @impl WardrikChannel.Installations
+  def owned(config, channel, owner) do
+    if Keyword.fetch!(config, :owner) == owner,
+      do: [elem(fetch(config, channel, "*"), 1)],
+      else: []
   end
 
   @impl WardrikChannel.Installations

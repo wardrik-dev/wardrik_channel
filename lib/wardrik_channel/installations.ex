@@ -13,6 +13,11 @@ defmodule WardrikChannel.Installations do
   @callback fetch(config :: term(), channel :: String.t(), workspace :: String.t()) ::
               {:ok, Installation.t()} | :error
 
+  @doc "Returns the channel's installations whose owner is `owner`, as `acme` or `acme/@jon`."
+  @callback owned(config :: term(), channel :: String.t(), owner :: String.t()) :: [
+              Installation.t()
+            ]
+
   @doc "Keeps `installation`, in place of any of the same channel and workspace."
   @callback put(config :: term(), Installation.t()) :: :ok | {:error, String.t()}
 

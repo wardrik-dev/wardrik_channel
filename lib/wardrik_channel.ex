@@ -75,7 +75,36 @@ defmodule WardrikChannel do
       @impl WardrikChannel
       def children(_channel), do: []
 
-      defoverridable child_spec: 1, children: 1
+      @impl Wardrik.Channel
+      def notify(opts, room, notice, approvers),
+        do: WardrikChannel.notify(__MODULE__, opts, room, notice, approvers)
+
+      defoverridable child_spec: 1, children: 1, notify: 4
+    end
+  end
+
+  @doc """
+  Posts `notice` in `room`, asking `approvers`, in the workspace nearest the agent's owner: its
+  user's, then its org's. Returns `{:skip, why}` where the channel is added to neither's. See
+  `c:Wardrik.Channel.notify/4`.
+  """
+  @spec notify(module(), keyword(), String.t(), Wardrik.Notice.t(), [String.t()]) ::
+          :ok | {:skip, String.t()} | {:error, term()}
+  def notify(adapter, opts, room, notice, approvers) do
+    channel = Channel.new(adapter, opts)
+
+    case Channel.nearest(channel, notice.agent) do
+      {:ok, installation} ->
+        adapter.deliver(channel, %Outbound{
+          installation: installation,
+          room: room,
+          thread: nil,
+          body: {:notice, notice},
+          approvers: approvers
+        })
+
+      :error ->
+        {:skip, "but #{channel.name} isn't added to a workspace of its owner's"}
     end
   end
 

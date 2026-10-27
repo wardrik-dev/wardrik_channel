@@ -15,4 +15,13 @@ defmodule WardrikChannel.Waiting do
           arguments: term(),
           asked_by: String.t() | nil
         }
+
+  @doc "Returns the calls a parked turn's `notice` waits on, each in the agent's own conversation."
+  @spec from_notice(Wardrik.Notice.t()) :: [t()]
+  def from_notice(%Wardrik.Notice{agent: agent, calls: calls}),
+    do:
+      for(
+        %{interrupt: interrupt, arguments: arguments} <- calls,
+        do: %__MODULE__{conversation: agent, interrupt: interrupt, arguments: arguments}
+      )
 end

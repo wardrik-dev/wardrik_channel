@@ -29,6 +29,17 @@ defmodule WardrikChannel.Installations.Stored do
   end
 
   @impl WardrikChannel.Installations
+  def owned(config, channel, owner) do
+    prefix = key(channel, "")
+    store = store(config)
+
+    for key <- WardrikStore.keys(store, prefix),
+        %{"owner" => ^owner} <- [WardrikStore.get(store, key)],
+        {:ok, installation} <- [fetch(config, channel, String.replace_prefix(key, prefix, ""))],
+        do: installation
+  end
+
+  @impl WardrikChannel.Installations
   def put(
         config,
         %Installation{channel: channel, workspace: workspace, owner: owner} = installation

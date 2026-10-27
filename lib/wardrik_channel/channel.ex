@@ -73,6 +73,21 @@ defmodule WardrikChannel.Channel do
   def installation(%__MODULE__{name: name, installations: {module, config}}, workspace),
     do: module.fetch(config, name, workspace)
 
+  @doc """
+  Returns the installation nearest the agent `id`'s owner: one of its user, as `acme/@jon`, then
+  one of its org, as `acme`. Returns `:error` where the channel is added to neither's workspace.
+  """
+  @spec nearest(t(), String.t()) :: {:ok, Installation.t()} | :error
+  def nearest(%__MODULE__{name: name, installations: {module, config}}, id) do
+    {:ok, %Wardrik.AgentID{owner: owner}} = Wardrik.AgentID.parse(id)
+    [org | _rest] = String.split(owner, "/", parts: 2)
+
+    case Enum.flat_map(Enum.uniq([owner, org]), &module.owned(config, name, &1)) do
+      [installation | _rest] -> {:ok, installation}
+      [] -> :error
+    end
+  end
+
   @doc "Keeps `installation`, in place of any of the same workspace."
   @spec install(t(), Installation.t()) :: :ok | {:error, String.t()}
   def install(%__MODULE__{installations: {module, config}}, installation),
