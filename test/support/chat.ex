@@ -76,7 +76,8 @@ defmodule WardrikChannel.Test do
          store: store,
          channels: [chat: {WardrikChannel.Test.Chat, chat}],
          capabilities: [tools: WardrikChannel.Test.Tools],
-         policies: [careful: [ask: ["echo"]]]
+         policies: [careful: [ask: ["echo"]]],
+         defaults: %{"retries" => %{"attempts" => 0, "on_exhausted" => "fail"}}
        )}
     )
 
