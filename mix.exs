@@ -59,9 +59,12 @@ defmodule WardrikChannel.MixProject do
 
   defp deps do
     [
-      {:wardrik, path: "../wardrik"},
+      {:wardrik_protocol, path: "../wardrik_protocol"},
+      {:wardrik_events, path: "../wardrik_events"},
+      {:wardrik_vault, path: "../wardrik_vault"},
+      {:wardrik_store, path: "../wardrik_store"},
       {:durable_server, "~> 0.1.6"},
-      {:mimic, "~> 2.4", only: :test},
+      {:wardrik_testing, path: "../wardrik_testing", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},

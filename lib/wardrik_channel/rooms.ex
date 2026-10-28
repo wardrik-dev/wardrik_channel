@@ -113,7 +113,8 @@ defmodule WardrikChannel.Rooms do
   defp record(%Workspace{channel: channel} = workspace, by, type, room, data) do
     scope = scope(workspace, by)
     data = Map.merge(data, %{"channel" => channel.name, "room" => room})
-    Wardrik.Audit.record(scope, type, "channels/#{channel.name}/rooms/#{room}", data)
+    subject = "channels/#{channel.name}/rooms/#{room}"
+    :ok = WardrikEvents.record(channel.events, {type, subject, data}, actor: scope.principal)
   end
 
   defp scope(workspace, nil), do: Workspace.scope(workspace)

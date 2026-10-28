@@ -30,36 +30,35 @@ defmodule WardrikChannel.Test.Chat do
   def include?(_channel, _installation, names, member), do: ("@" <> member.name) in names
 end
 
-defmodule WardrikChannel.Test.Tools do
-  @moduledoc "A capability with one tool, `echo`."
-  @behaviour WardrikCore.Capability
-
-  @impl WardrikCore.Capability
-  def tools(_context, _opts) do
-    [
-      WardrikCore.Tool.new!(
-        name: "echo",
-        description: "Echoes text",
-        schema: [text: [type: :string]],
-        run: fn args, _context -> {:ok, Map.get(args, :text, "")} end
-      )
-    ]
-  end
-end
-
 defmodule WardrikChannel.Test do
-  @moduledoc "Starts a Wardrik with a chat channel for a test, and stubs the model's answers."
+  @moduledoc "Runs a chat channel for a test, over a real store and events, on the test's own server."
 
   import ExUnit.Callbacks, only: [start_supervised!: 1]
 
-  @model "anthropic:claude-haiku-4-5"
+  alias WardrikTesting.Server
 
-  def start_wardrik(context) do
-    store = WardrikStore.ETS.new(name: :"store #{context.test}")
-    name = :"wardrik #{context.test}"
+  def start_channel(context) do
+    n = System.unique_integer([:positive])
+    name = :"wardrik #{n}"
+    channel = "chat-#{n}"
+    store = WardrikStore.ETS.new(name: :"store #{n}")
+    events = Server.events(name)
     refusals = :counters.new(1, [])
 
-    chat = [
+    start_supervised!({WardrikStore, store})
+
+    start_supervised!(
+      {WardrikEvents, name: events, store: store, deployment: "test", retention: :infinity}
+    )
+
+    :ok = Server.start(name, offered: Map.get(context, :offered, [{"acme/triage", [channel]}]))
+
+    opts = [
+      server: Server,
+      wardrik: name,
+      events: events,
+      channel: channel,
+      store: store,
       token: "xoxb-test",
       owner: "acme",
       approvers: ["@maria"],
@@ -67,64 +66,17 @@ defmodule WardrikChannel.Test do
       refusals: refusals
     ]
 
-    start_supervised!({WardrikStore, store})
-
-    start_supervised!(
-      {Wardrik,
-       Wardrik.new(
-         name: name,
-         store: store,
-         channels: [chat: {WardrikChannel.Test.Chat, chat}],
-         capabilities: [tools: WardrikChannel.Test.Tools],
-         policies: [careful: [ask: ["echo"]]],
-         defaults: %{"retries" => %{"attempts" => 0, "on_exhausted" => "fail"}}
-       )}
-    )
-
-    channel =
-      WardrikChannel.channel(
-        WardrikChannel.Test.Chat,
-        chat ++ [wardrik: name, channel: "chat", store: store]
-      )
-
+    start_supervised!({WardrikChannel.Test.Chat, opts})
+    channel = WardrikChannel.channel(WardrikChannel.Test.Chat, opts)
     {:ok, workspace} = WardrikChannel.workspace(channel, "T1")
-    owner = Wardrik.as(name, "acme/@maria", roles: [:owner], resources: ["*"])
 
     %{
-      wardrik: name,
+      name: name,
       store: store,
+      events: events,
       channel: channel,
       workspace: workspace,
-      owner: owner,
       refusals: refusals
     }
   end
-
-  def define(owner, id, fields \\ []) do
-    {:ok, _agent} = Wardrik.Agent.define(owner, id, [model: @model] ++ fields)
-    :ok
-  end
-
-  def answers(responses) do
-    {:ok, queue} = Agent.start_link(fn -> responses end)
-
-    Mimic.stub(ReqLLM.StreamResponse, :process_stream, fn response, _opts -> {:ok, response} end)
-
-    Mimic.stub(ReqLLM, :stream_text, fn _model, _messages, _opts ->
-      {:ok, Agent.get_and_update(queue, fn [next | rest] -> {next, rest} end)}
-    end)
-  end
-
-  def answer(text), do: response(ReqLLM.Context.assistant(text))
-
-  def calling(id, name, args),
-    do:
-      response(
-        ReqLLM.Context.assistant("",
-          tool_calls: [ReqLLM.ToolCall.new(id, name, JSON.encode!(args))]
-        )
-      )
-
-  defp response(message),
-    do: %ReqLLM.Response{id: "resp", model: "test", context: nil, message: message}
 end

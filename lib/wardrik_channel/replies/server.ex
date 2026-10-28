@@ -38,7 +38,7 @@ defmodule WardrikChannel.Replies.Server do
   def init(%State{} = state, %{channel: channel}) do
     Process.flag(:trap_exit, true)
     state = %{state | channel: channel}
-    {:ok, follower} = Wardrik.Listener.start_link(Follower, follower(state))
+    {:ok, follower} = WardrikEvents.Listener.start_link(Follower, follower(state))
     {:ok, %{state | follower: follower}}
   end
 
@@ -78,10 +78,14 @@ defmodule WardrikChannel.Replies.Server do
   defp follower(state) do
     {:ok, workspace} = workspace(state)
 
+    resources = [Workspace.logs(workspace, state.room)]
+    events = state.channel.events
+
     [
-      wardrik: state.channel.wardrik,
-      resources: [Workspace.logs(workspace, state.room)],
+      events: events,
+      resources: resources,
       types: @types,
+      started: WardrikEvents.head(events, resources),
       server: self()
     ]
   end

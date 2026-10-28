@@ -9,12 +9,13 @@ defmodule WardrikChannel.Installations.Stored do
   @behaviour WardrikChannel.Installations
 
   alias WardrikChannel.Installation
+  alias WardrikCore.Principal
 
   @impl WardrikChannel.Installations
   def fetch(config, channel, workspace) do
     with %{"owner" => owner, "approvers" => approvers} <-
            WardrikStore.get(store(config), key(channel, workspace)),
-         {:ok, token} <- Wardrik.fetch_secret(config[:wardrik], owner, secret(channel, workspace)) do
+         {:ok, token} <- sealed(config, owner, secret(channel, workspace)) do
       {:ok,
        %Installation{
          channel: channel,
@@ -46,13 +47,7 @@ defmodule WardrikChannel.Installations.Stored do
       ) do
     kept = %{"owner" => owner, "approvers" => kept_approvers(installation.approvers)}
 
-    with :ok <-
-           Wardrik.put_secret(
-             config[:wardrik],
-             owner,
-             secret(channel, workspace),
-             installation.token
-           ),
+    with {:ok, _sealed} <- seal(config, owner, secret(channel, workspace), installation.token),
          {:ok, _vsn} <- WardrikStore.put(store(config), key(channel, workspace), kept) do
       :ok
     else
@@ -64,7 +59,7 @@ defmodule WardrikChannel.Installations.Stored do
   def delete(config, channel, workspace) do
     case WardrikStore.get(store(config), key(channel, workspace)) do
       %{"owner" => owner} ->
-        :ok = Wardrik.delete_secret(config[:wardrik], owner, secret(channel, workspace))
+        :ok = unseal(config, owner, secret(channel, workspace))
         WardrikStore.delete(store(config), key(channel, workspace))
 
       nil ->
@@ -77,6 +72,25 @@ defmodule WardrikChannel.Installations.Stored do
 
   defp kept_approvers(:anyone), do: "anyone"
   defp kept_approvers(names), do: names
+
+  defp sealed(config, owner, name), do: config |> vault() |> sealed_in(owner, name)
+
+  defp sealed_in(nil, _owner, _name), do: {:error, :no_keys}
+  defp sealed_in(vault, owner, name), do: WardrikVault.fetch(vault, %Principal{id: owner}, name)
+
+  defp seal(config, owner, name, token), do: config |> vault() |> seal_in(owner, name, token)
+
+  defp seal_in(nil, _owner, _name, _token), do: {:error, :no_keys}
+
+  defp seal_in(vault, owner, name, token),
+    do: WardrikVault.put(vault, %Principal{id: owner}, name, token)
+
+  defp unseal(config, owner, name), do: config |> vault() |> unseal_in(owner, name)
+
+  defp unseal_in(nil, _owner, _name), do: :ok
+  defp unseal_in(vault, owner, name), do: WardrikVault.delete(vault, %Principal{id: owner}, name)
+
+  defp vault(config), do: Keyword.get(config, :vault)
 
   defp store(config), do: Keyword.fetch!(config, :store)
   defp key(channel, workspace), do: "installations/#{channel}/#{workspace}"

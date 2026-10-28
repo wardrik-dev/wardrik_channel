@@ -4,12 +4,15 @@ defmodule WardrikChannel.Replies.Follower do
   hands the server each event, and waits until it's posted, so one is in flight at a time.
   """
 
-  use Wardrik.Listener
+  use WardrikEvents.Listener
 
-  @impl Wardrik.Listener
-  def handle(event, listener),
-    do: GenServer.call(listener.options[:server], {:event, event, listener.cursor}, :infinity)
+  @impl WardrikEvents.Listener
+  def handle(event, listener) do
+    event = Wardrik.Event.from_json(event)
+    GenServer.call(listener.options[:server], {:event, event, listener.cursor}, :infinity)
+  end
 
-  @impl Wardrik.Listener
-  def cursor(listener), do: GenServer.call(listener.options[:server], :cursor)
+  @impl WardrikEvents.Listener
+  def cursor(listener),
+    do: GenServer.call(listener.options[:server], :cursor) || listener.options[:started]
 end

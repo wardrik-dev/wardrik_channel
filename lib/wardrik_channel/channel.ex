@@ -1,14 +1,18 @@
 defmodule WardrikChannel.Channel do
   @moduledoc """
   A channel is one chat app a Wardrik runs, by the name it gives it: its adapter, its options, and
-  the installations that say where it's added.
+  the installations that say where it's added. The Wardrik hands it the `Wardrik.Server` that runs
+  its operations, the events it follows and records changes in, and the vault it seals tokens in.
   """
 
   alias WardrikChannel.Installation
   alias WardrikChannel.Installations
 
   @own [
+    :server,
     :wardrik,
+    :events,
+    :vault,
     :channel,
     :store,
     :token,
@@ -21,7 +25,9 @@ defmodule WardrikChannel.Channel do
 
   @enforce_keys [
     :name,
+    :server,
     :wardrik,
+    :events,
     :adapter,
     :store,
     :installations,
@@ -29,11 +35,14 @@ defmodule WardrikChannel.Channel do
     :deciding,
     :options
   ]
-  defstruct [approvers: []] ++ @enforce_keys
+  defstruct [vault: nil, approvers: []] ++ @enforce_keys
 
   @type t() :: %__MODULE__{
           name: String.t(),
+          server: module(),
           wardrik: atom(),
+          events: atom(),
+          vault: atom() | nil,
           adapter: module(),
           store: WardrikStore.t(),
           installations: {module(), term()},
@@ -52,15 +61,18 @@ defmodule WardrikChannel.Channel do
     name = Keyword.fetch!(opts, :channel)
     named!(name)
     installations = installations!(name, opts)
-    wardrik = Keyword.fetch!(opts, :wardrik)
+    vault = Keyword.get(opts, :vault)
     store = WardrikStore.scope(Keyword.fetch!(opts, :store), "wardrik_channel")
 
     %__MODULE__{
       name: name,
-      wardrik: wardrik,
+      server: Keyword.fetch!(opts, :server),
+      wardrik: Keyword.fetch!(opts, :wardrik),
+      events: Keyword.fetch!(opts, :events),
+      vault: vault,
       adapter: adapter,
       store: store,
-      installations: stored(installations, wardrik, store),
+      installations: stored(installations, vault, store),
       offering: Keyword.get(opts, :offering, offering(name)),
       deciding: Keyword.get(opts, :deciding, deciding()),
       approvers: Keyword.get(opts, :approvers, []),
@@ -125,8 +137,8 @@ defmodule WardrikChannel.Channel do
     end
   end
 
-  defp stored(:stored, wardrik, store), do: {Installations.Stored, wardrik: wardrik, store: store}
-  defp stored(installations, _wardrik, _store), do: installations
+  defp stored(:stored, vault, store), do: {Installations.Stored, vault: vault, store: store}
+  defp stored(installations, _vault, _store), do: installations
 
   defp offering(name),
     do: "An agent answers here once its definition lists #{name} among its channels."

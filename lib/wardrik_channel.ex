@@ -112,18 +112,6 @@ defmodule WardrikChannel do
   @spec channel(module(), keyword()) :: Channel.t()
   def channel(adapter, opts), do: Channel.new(adapter, opts)
 
-  @doc """
-  Returns the channel the Wardrik `instance` runs as `name`, for your app's own routes, such as
-  where a chat app sends someone back once it's added to their workspace.
-
-      {:ok, channel} = WardrikChannel.fetch(MyApp.Wardrik, "slack")
-  """
-  @spec fetch(atom(), String.t()) :: {:ok, Channel.t()} | :error
-  def fetch(instance, name) do
-    with {:ok, {adapter, opts}} <- Wardrik.Channel.fetch(instance, name),
-         do: {:ok, Channel.new(adapter, opts)}
-  end
-
   @doc "Returns the channel in the workspace the chat app names `id`, or `:error` where it isn't added there."
   @spec workspace(Channel.t(), String.t()) :: {:ok, Workspace.t()} | :error
   def workspace(channel, id), do: Workspace.new(channel, id)
