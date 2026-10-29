@@ -6,12 +6,12 @@ defmodule WardrikChannel.Installations.Stored do
   needs `:keys` to seal tokens with.
   """
 
-  @behaviour WardrikChannel.Installations
+  @behaviour Wardrik.Channel.Installations
 
-  alias WardrikChannel.Installation
+  alias Wardrik.Channel.Installation
   alias WardrikCore.Principal
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def fetch(config, channel, workspace) do
     with %{"owner" => owner, "approvers" => approvers} <-
            WardrikStore.get(store(config), key(channel, workspace)),
@@ -29,7 +29,7 @@ defmodule WardrikChannel.Installations.Stored do
     end
   end
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def owned(config, channel, owner) do
     prefix = key(channel, "")
     store = store(config)
@@ -40,7 +40,7 @@ defmodule WardrikChannel.Installations.Stored do
         do: installation
   end
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def put(
         config,
         %Installation{channel: channel, workspace: workspace, owner: owner} = installation
@@ -55,7 +55,7 @@ defmodule WardrikChannel.Installations.Stored do
     end
   end
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def delete(config, channel, workspace) do
     case WardrikStore.get(store(config), key(channel, workspace)) do
       %{"owner" => owner} ->

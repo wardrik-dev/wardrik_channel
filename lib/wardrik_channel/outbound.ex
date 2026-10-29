@@ -29,7 +29,7 @@ defmodule WardrikChannel.Outbound do
           | {:notice, Wardrik.Notice.t()}
 
   @type t() :: %__MODULE__{
-          installation: WardrikChannel.Installation.t(),
+          installation: Wardrik.Channel.Installation.t(),
           room: String.t(),
           thread: String.t() | nil,
           body: body(),

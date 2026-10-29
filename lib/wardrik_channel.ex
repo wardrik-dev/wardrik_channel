@@ -37,11 +37,11 @@ defmodule WardrikChannel do
   Reach for this when you write an adapter for a chat app.
   """
 
+  alias Wardrik.Channel.Installation
   alias Wardrik.Error
   alias WardrikChannel.Binding
   alias WardrikChannel.Channel
   alias WardrikChannel.Inbound
-  alias WardrikChannel.Installation
   alias WardrikChannel.Member
   alias WardrikChannel.Outbound
   alias WardrikChannel.Replies
@@ -57,6 +57,26 @@ defmodule WardrikChannel do
 
   @doc "Returns what the channel runs besides its rooms, such as a connection to the chat app."
   @callback children(Channel.t()) :: [Supervisor.child_spec() | {module(), term()}]
+
+  @doc """
+  Returns where someone acting for `owner` adds the chat app to a workspace of theirs. Takes
+  `:return_to`, where they're sent once it's added.
+  """
+  @callback install_url(Channel.t(), owner :: String.t(), keyword()) ::
+              {:ok, String.t()} | {:error, String.t()}
+
+  @doc """
+  Adds the chat app to the workspace the chat app sent someone back from, for `owner`, given the
+  query it sent them back with. Returns the installation, with the workspace's name, and where to
+  send them next.
+  """
+  @callback installed(Channel.t(), owner :: String.t(), query :: map()) ::
+              {:ok, Installation.t(), String.t() | nil} | {:error, String.t()}
+
+  @doc "Takes the chat app out of `workspace`, where the chat app lets it, and forgets the workspace."
+  @callback uninstall(Channel.t(), workspace :: String.t()) :: :ok | {:error, String.t()}
+
+  @optional_callbacks install_url: 3, installed: 3, uninstall: 2
 
   defmacro __using__(_opts) do
     quote do

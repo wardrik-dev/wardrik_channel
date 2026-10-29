@@ -10,9 +10,9 @@ defmodule WardrikChannel.Workspace do
   """
 
   alias Wardrik.AgentID
+  alias Wardrik.Channel.Installation
   alias Wardrik.Statement
   alias WardrikChannel.Channel
-  alias WardrikChannel.Installation
   alias WardrikChannel.Member
   alias WardrikChannel.Offer
   alias WardrikCore.Principal

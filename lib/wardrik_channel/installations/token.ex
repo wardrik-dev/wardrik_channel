@@ -5,11 +5,11 @@ defmodule WardrikChannel.Installations.Token do
   others is refused. Found by its owner, its workspace is `*`, whichever the token reaches.
   """
 
-  @behaviour WardrikChannel.Installations
+  @behaviour Wardrik.Channel.Installations
 
-  alias WardrikChannel.Installation
+  alias Wardrik.Channel.Installation
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def fetch(config, channel, workspace) do
     {:ok,
      %Installation{
@@ -21,17 +21,17 @@ defmodule WardrikChannel.Installations.Token do
      }}
   end
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def owned(config, channel, owner) do
     if Keyword.fetch!(config, :owner) == owner,
       do: [elem(fetch(config, channel, "*"), 1)],
       else: []
   end
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def put(_config, %Installation{channel: channel}),
     do: {:error, "#{channel} is added with its token, and in no other way."}
 
-  @impl WardrikChannel.Installations
+  @impl Wardrik.Channel.Installations
   def delete(_config, _channel, _workspace), do: :ok
 end

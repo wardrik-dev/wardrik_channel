@@ -79,7 +79,7 @@ may always decide it. Anyone else is told who may.
 ## Many workspaces
 
 `token:` adds the channel to the one workspace it reaches. To add one app to many workspaces,
-one for each org, give it `installations: {module, config}`, a `WardrikChannel.Installations`
+one for each org, give it `installations: {module, config}`, a `Wardrik.Channel.Installations`
 that keeps each workspace's token, owner and approvers.
 
 ## Rooms in the audit

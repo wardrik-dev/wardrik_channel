@@ -5,8 +5,9 @@ defmodule WardrikChannel.Channel do
   its operations, the events it follows and records changes in, and the vault it seals tokens in.
   """
 
-  alias WardrikChannel.Installation
-  alias WardrikChannel.Installations
+  alias Wardrik.Channel.Installation
+  alias WardrikChannel.Installations.Stored
+  alias WardrikChannel.Installations.Token
 
   @own [
     :server,
@@ -129,7 +130,7 @@ defmodule WardrikChannel.Channel do
         installations
 
       [token: _token] ->
-        {Installations.Token, Keyword.take(opts, [:token, :owner, :approvers])}
+        {Token, Keyword.take(opts, [:token, :owner, :approvers])}
 
       _neither_or_both ->
         raise ArgumentError,
@@ -137,7 +138,7 @@ defmodule WardrikChannel.Channel do
     end
   end
 
-  defp stored(:stored, vault, store), do: {Installations.Stored, vault: vault, store: store}
+  defp stored(:stored, vault, store), do: {Stored, vault: vault, store: store}
   defp stored(installations, _vault, _store), do: installations
 
   defp offering(name),

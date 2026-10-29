@@ -3,10 +3,10 @@ defmodule WardrikChannelTest do
 
   import WardrikChannel.Test
 
+  alias Wardrik.Channel.Installation
   alias WardrikChannel.Binding
   alias WardrikChannel.Channel
   alias WardrikChannel.Inbound
-  alias WardrikChannel.Installation
   alias WardrikChannel.Member
   alias WardrikChannel.Offer
   alias WardrikChannel.Outbound
@@ -425,11 +425,8 @@ defmodule WardrikChannelTest do
     end
   end
 
-  test "an installation covers its owner's own agents alone", %{workspace: workspace} do
-    assert Installation.covers?(workspace.installation, "acme/triage")
-    assert Installation.covers?(workspace.installation, "acme/triage/C1-1.1")
-    refute Installation.covers?(workspace.installation, "globex/triage")
-    refute Installation.covers?(workspace.installation, "acme/*")
+  test "an installation names its owner's agents", %{workspace: workspace} do
+    assert Installation.agents(workspace.installation) == "acme/agent/*"
   end
 
   defp channel_options(context) do
