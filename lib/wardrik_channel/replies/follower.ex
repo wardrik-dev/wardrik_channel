@@ -1,7 +1,8 @@
 defmodule WardrikChannel.Replies.Follower do
   @moduledoc """
-  The listener that follows a room's conversations for its `WardrikChannel.Replies.Server`. It
-  hands the server each event, and waits until it's posted, so one is in flight at a time.
+  Follows a room's conversations for its `WardrikChannel.Replies.Server`.
+
+  Hands the server each event and waits until it's posted, so one event is in flight at a time.
   """
 
   use WardrikEvents.Listener

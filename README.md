@@ -1,25 +1,33 @@
 # WardrikChannel
 
-Chat apps people reach [Wardrik](https://hexdocs.pm/wardrik)'s agents through, such as Slack:
-rooms, threads, replies and approvals. Each chat app is an adapter of its own, such as
-[WardrikSlack](https://hexdocs.pm/wardrik_slack). This package is what every adapter shares.
+Lets people talk to [Wardrik](https://hexdocs.pm/wardrik)'s agents from chat apps, such as Slack.
+It handles rooms, threads, replies and approvals.
+
+Each chat app has its own adapter package, such as [WardrikSlack](https://hexdocs.pm/wardrik_slack).
+This package holds what every adapter shares.
 
 ## Install
 
-You install an adapter, which brings this in:
+Add an adapter. It brings this package in.
 
 ```elixir
 def deps do
   [
-    {:wardrik_slack, "~> 0.1"}
+    {:wardrik_slack, "~> 0.1.0-rc.1"}
   ]
 end
 ```
 
+To write an adapter of your own, depend on this package directly:
+
+```elixir
+{:wardrik_channel, "~> 0.1.0-rc.1"}
+```
+
 ## Wire it up
 
-A channel is one chat app your Wardrik runs, by a name of your own. Give it the token it acts
-with, and the owner whose agents answer there:
+A channel is one chat app Wardrik runs, under a name you choose. Give it a token, and the owner
+whose agents answer there:
 
 ```elixir
 defmodule MyApp.Wardrik do
@@ -27,7 +35,6 @@ defmodule MyApp.Wardrik do
 end
 
 config :my_app, MyApp.Wardrik,
-  data_dir: "priv/wardrik",
   channels: [
     slack:
       {WardrikSlack,
@@ -38,14 +45,13 @@ config :my_app, MyApp.Wardrik,
   ]
 ```
 
-What the chat app sends reaches your Wardrik at `POST /v1/channels/slack/{path}`, served by
-[WardrikHTTP](https://hexdocs.pm/wardrik_http):
+The chat app posts to `POST /v1/channels/slack/{path}`. Serve it with `Wardrik.HTTP`:
 
 ```elixir
-forward "/", WardrikHTTP, wardrik: MyApp.Wardrik
+forward "/", Wardrik.HTTP, wardrik: MyApp.Wardrik
 ```
 
-Then list the channel in an agent's definition:
+List the channel in an agent's definition:
 
 ```elixir
 scope = MyApp.Wardrik.as("acme/@maria", roles: [:owner], resources: ["acme/*"])
@@ -57,32 +63,52 @@ Wardrik.Agent.define(scope, "acme/triage",
 )
 ```
 
-Invite the bot into a room. With one agent offered, it answers there from then on. Mention the
-bot, and the agent answers in a thread under your message. Reply in the thread, and it answers
-again without a mention.
+Then invite the bot into a room:
+
+1. If one agent is offered, it answers in that room from then on. With several, someone picks one.
+2. Mention the bot. The agent answers in a thread under your message.
+3. Reply in the thread. The agent answers again, no mention needed.
 
 ## Threads
 
-Each thread is a conversation of the agent's own, as `acme/triage/slack.T0123.C024BE91L.1696.1234`.
-It runs on the agent's definition, with its own history. Everyone in the workspace may message the
-owner's agents, as themselves, such as `slack:T0123/U024BE7LH`.
+Each thread is its own conversation with the agent, with its own history:
 
-Replies come from the agents' logs. Each room is one process in your cluster, kept in the
-Wardrik's store, so a reply delayed by a restart is still posted.
+```
+acme/triage/slack.T0123.C024BE91L.1696.1234
+```
+
+Anyone in the workspace may message the owner's agents. They act as themselves, as
+`slack:T0123/U024BE7LH`.
+
+Replies are read from the agents' logs. Each room has one process in your cluster, kept in
+Wardrik's store. A reply delayed by a restart is still posted.
 
 ## Approvals
 
-A call an agent waits on is posted in its thread, with its arguments, for someone to decide.
-`approvers` may decide, as the adapter names people, or `:anyone`. Whoever asked for the turn
-may always decide it. Anyone else is told who may.
+When an agent waits on a call, the call and its arguments are posted in the thread. These people
+may decide it:
+
+* anyone in `approvers`, as the chat app names people, or everyone with `approvers: :anyone`
+* whoever asked for that turn
+
+Anyone else is told who may decide.
 
 ## Many workspaces
 
-`token:` adds the channel to the one workspace it reaches. To add one app to many workspaces,
-one for each org, give it `installations: {module, config}`, a `Wardrik.Channel.Installations`
-that keeps each workspace's token, owner and approvers.
+`token:` adds the channel to the one workspace that token reaches. To add one app to many
+workspaces, such as one per org, give the channel `installations:` instead of `token:`:
+
+```elixir
+# Kept in Wardrik: owners in its store, tokens sealed with its :keys
+installations: :stored
+
+# Kept by your app, in a module implementing Wardrik.Channel.Installations
+installations: {MyApp.ChatInstallations, []}
+```
+
+Your adapter's docs list what else it needs, such as Slack's `:client_id`.
 
 ## Rooms in the audit
 
-Binding a room, and unbinding it, are recorded in the Wardrik's audit as `wardrik.room.bound` and
-`wardrik.room.unbound`, with who did it.
+Binding a room is recorded in Wardrik's audit as `wardrik.room.bound`. Unbinding it is recorded as
+`wardrik.room.unbound`. Both say who did it.

@@ -1,11 +1,9 @@
 defmodule WardrikChannel do
   @moduledoc """
-  Chat apps people reach Wardrik's agents through, such as Slack. A *channel* is one chat app your
-  Wardrik runs, by a name of your own. A *room* is a place in it, such as a Slack channel.
+  Lets people talk to Wardrik's agents from chat apps, such as Slack.
 
-      defmodule MyApp.Wardrik do
-        use Wardrik, otp_app: :my_app
-      end
+  A *channel* is one chat app Wardrik runs, under a name you choose. A *room* is a place in it,
+  such as a Slack channel.
 
       config :my_app, MyApp.Wardrik,
         channels: [
@@ -16,25 +14,67 @@ defmodule WardrikChannel do
 
       Wardrik.Agent.define(scope, "acme/triage", model: "anthropic:claude-haiku-4-5", channels: ["slack"])
 
-  Invite the bot into a room, and the agent answers there in threads: mention it to start one,
-  and reply in the thread to go on. Each thread is a conversation of the agent's own, as
-  `acme/triage/slack.T0123.C024BE91L.1696.1234`. A call the agent waits on is posted in the thread
-  for an approver, or whoever asked, to decide. See `WardrikChannel.Rooms` and
+  Mention the bot in a room to start a thread. Reply in the thread to go on. Each thread is its own
+  conversation, as `acme/triage/slack.T0123.C024BE91L.1696.1234`. Calls the agent waits on are
+  posted in the thread for someone to decide. See `WardrikChannel.Rooms` and
   `WardrikChannel.Replies`.
 
-  Every channel takes `:token` and `:owner`, whose agents answer there, or its `:installations`,
-  for one app added to many workspaces, `:stored` to keep them in the Wardrik; `:approvers`, as the channel names people, or `:anyone`;
-  and `:offering` and `:deciding`, what a room with no agent and someone who may not decide are
-  told. Its adapter reads the rest.
+  ## Options
 
-  ## Adapters
+  Every channel takes these. Its adapter reads the rest.
 
-  An adapter is a package of its own, such as `wardrik_slack`, that does `use WardrikChannel`. It
-  answers what the chat app sends with `c:Wardrik.Channel.request/2`, finding the workspace with
-  `workspace/2`, and hands each message posted to `received/2`, and each button pressed to
-  `decide/4`. It implements `c:deliver/2` to post, and `c:include?/4` to find approvers.
+    * `:token` - the token the channel acts with, in the one workspace it reaches. Needs `:owner`.
+    * `:owner` - whose agents answer, as `"acme"`.
+    * `:installations` - instead of `:token`, to add one app to many workspaces. Either `:stored`,
+      to keep them in Wardrik (needs Wardrik's `:keys`), or `{module, config}`, a
+      `Wardrik.Channel.Installations`.
+    * `:approvers` - who may decide what agents wait on, as the chat app names people, or
+      `:anyone`. `[]` unless set. Whoever asked for a turn may always decide it.
+    * `:offering` - what a room with no agent is told.
+    * `:deciding` - what someone who may not decide is told.
 
-  Reach for this when you write an adapter for a chat app.
+  Raises `ArgumentError` on start if neither or both of `:token` and `:installations` are given,
+  or if the channel's name isn't lower-case letters, digits and `-`, starting with a letter.
+
+  ## Writing an adapter
+
+  An adapter is a package, such as `wardrik_slack`, that does `use WardrikChannel`. It implements
+  `c:deliver/2` and `c:include?/4`, and `c:Wardrik.Channel.request/2` to take what the chat app
+  sends:
+
+      defmodule MyChat do
+        use WardrikChannel
+
+        @impl Wardrik.Channel
+        def request(opts, %{path: "events", body: body}) do
+          channel = WardrikChannel.channel(__MODULE__, opts)
+          event = JSON.decode!(body)
+
+          with {:ok, workspace} <- WardrikChannel.workspace(channel, event["team"]) do
+            WardrikChannel.received(workspace, %WardrikChannel.Inbound{
+              room: event["room"],
+              id: event["id"],
+              sender: %WardrikChannel.Member{id: event["user"]},
+              text: event["text"],
+              mentioned?: event["mentioned"]
+            })
+          end
+
+          %{status: 200, headers: %{}, body: ""}
+        end
+
+        @impl WardrikChannel
+        def deliver(channel, %WardrikChannel.Outbound{} = outbound) do
+          # Post outbound.body in outbound.room, in outbound.thread
+          :ok
+        end
+
+        @impl WardrikChannel
+        def include?(_channel, _installation, names, member), do: member.id in names
+      end
+
+  Hand each button press to `decide/4`. `use WardrikChannel` defines `child_spec/1`,
+  `c:children/1` and `c:Wardrik.Channel.notify/4`. Each can be overridden.
   """
 
   alias Wardrik.Channel.Installation
@@ -48,32 +88,36 @@ defmodule WardrikChannel do
   alias WardrikChannel.Rooms
   alias WardrikChannel.Workspace
 
-  @doc "Posts `outbound` in its thread. An error is tried again later."
+  @doc "Posts `outbound` in its thread. Returning an error has it tried again later."
   @callback deliver(Channel.t(), Outbound.t()) :: :ok | {:error, term()}
 
-  @doc "Returns whether `names`, as the channel names people, such as `@maria`, include `member`."
+  @doc "Returns whether `member` is one of `names`, as the chat app names people, such as `@maria`."
   @callback include?(Channel.t(), Installation.t(), names :: [String.t()], Member.t()) ::
               boolean()
 
-  @doc "Returns what the channel runs besides its rooms, such as a connection to the chat app."
+  @doc "Returns extra children to run, such as a connection to the chat app. `[]` by default."
   @callback children(Channel.t()) :: [Supervisor.child_spec() | {module(), term()}]
 
   @doc """
-  Returns where someone acting for `owner` adds the chat app to a workspace of theirs. Takes
-  `:return_to`, where they're sent once it's added.
+  Returns the URL where someone acting for `owner` adds the chat app to their workspace.
+
+  ## Options
+
+    * `:return_to` - where they're sent once it's added.
   """
   @callback install_url(Channel.t(), owner :: String.t(), keyword()) ::
               {:ok, String.t()} | {:error, String.t()}
 
   @doc """
-  Adds the chat app to the workspace the chat app sent someone back from, for `owner`, given the
-  query it sent them back with. Returns the installation, with the workspace's name, and where to
-  send them next.
+  Finishes adding the chat app to a workspace, for `owner`.
+
+  `query` is the query string the chat app redirected back with. Returns the installation and
+  where to send the person next.
   """
   @callback installed(Channel.t(), owner :: String.t(), query :: map()) ::
               {:ok, Installation.t(), String.t() | nil} | {:error, String.t()}
 
-  @doc "Takes the chat app out of `workspace`, where the chat app lets it, and forgets the workspace."
+  @doc "Removes the chat app from `workspace`, where the chat app allows it, and forgets the workspace."
   @callback uninstall(Channel.t(), workspace :: String.t()) :: :ok | {:error, String.t()}
 
   @optional_callbacks install_url: 3, installed: 3, uninstall: 2
@@ -104,9 +148,10 @@ defmodule WardrikChannel do
   end
 
   @doc """
-  Posts `notice` in `room`, asking `approvers`, in the workspace nearest the agent's owner: its
-  user's, then its org's. Returns `{:skip, why}` where the channel is added to neither's. See
-  `c:Wardrik.Channel.notify/4`.
+  Posts `notice` in `room`, asking `approvers`. See `c:Wardrik.Channel.notify/4`.
+
+  Posts in the workspace of the agent's owner. That is the owning user's workspace if the channel
+  is added to one, else the org's. Returns `{:skip, why}` if it's added to neither.
   """
   @spec notify(module(), keyword(), String.t(), Wardrik.Notice.t(), [String.t()]) ::
           :ok | {:skip, String.t()} | {:error, term()}
@@ -128,22 +173,26 @@ defmodule WardrikChannel do
     end
   end
 
-  @doc "Returns the channel `adapter` runs, from the options the Wardrik hands it."
+  @doc "Returns `adapter`'s channel, built from the options Wardrik passes it."
   @spec channel(module(), keyword()) :: Channel.t()
   def channel(adapter, opts), do: Channel.new(adapter, opts)
 
-  @doc "Returns the channel in the workspace the chat app names `id`, or `:error` where it isn't added there."
+  @doc "Returns the channel in workspace `id`, or `:error` if it isn't added there."
   @spec workspace(Channel.t(), String.t()) :: {:ok, Workspace.t()} | :error
   def workspace(channel, id), do: Workspace.new(channel, id)
 
   @doc """
-  Asks the room's agent what `inbound` says, as its sender, in the conversation of its thread, and
-  has the thread answered. A message posted in the room starts a thread where it mentions the bot,
-  or where the agent answers every message. A reply in a thread reaches the agent where the thread
-  is the agent's already. Returns `:ignored` for a message no agent answers, or why it couldn't
-  ask.
+  Sends `inbound` to the room's agent, as its sender, and has the reply posted in its thread.
 
-  A message behind calls the agent waits on waits too, so those calls are posted again.
+  The agent is asked when:
+
+    * the message mentions the bot
+    * the room's agent answers every message
+    * the message replies in a thread the agent already answers in
+
+  Returns `{:asked, conversation}`, `:ignored` if no agent answers, or `{:error, message}`.
+
+  If the agent is waiting on calls, the message queues behind them and the calls are posted again.
   """
   @spec received(Workspace.t(), Inbound.t()) ::
           {:asked, String.t()} | :ignored | {:error, String.t()}
@@ -189,13 +238,22 @@ defmodule WardrikChannel do
   end
 
   @doc """
-  Decides a call a thread's agent waits on, as `member`. `waiting` holds what the adapter put on
-  its button: the `:conversation`, the `:interrupt`'s id, and `:asked_by`, who asked for the turn,
-  as `WardrikChannel.Waiting` gave them. `answer` is `{:approve, note}` or `{:deny, reason}`, either
-  `nil` where none was given.
+  Approves or denies a call the agent waits on, as `member`.
 
-  An approver may decide, and so may whoever asked. Anyone else is told who may, with the
-  channel's `:deciding`.
+      waiting = %{conversation: conversation, interrupt: "int_1", asked_by: nil}
+      WardrikChannel.decide(workspace, member, waiting, {:approve, "Looks fine."})
+      #=> {:ok, %Wardrik.Decision{}}
+
+  `waiting` is what the adapter put on the button, from a `WardrikChannel.Waiting`:
+
+    * `:conversation` - the conversation's ID.
+    * `:interrupt` - the interrupt's ID.
+    * `:asked_by` - who asked for the turn. Optional.
+
+  `answer` is `{:approve, note}` or `{:deny, reason}`. Either may be `nil`.
+
+  Approvers may decide, and so may whoever asked. Anyone else gets `{:error, deciding}`, the
+  channel's `:deciding` message.
   """
   @spec decide(Workspace.t(), Member.t(), map(), {:approve | :deny, String.t() | nil}) ::
           {:ok, Wardrik.Decision.t()} | {:error, String.t()}

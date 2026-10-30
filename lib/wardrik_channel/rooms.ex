@@ -1,12 +1,24 @@
 defmodule WardrikChannel.Rooms do
   @moduledoc """
-  Rooms keep which agent answers in each room, and the threads it has answered in.
+  Keeps which agent answers in each room, and the threads it has answered in.
 
-  An adapter tells `joined/3` when its bot is invited into a room. With one agent offered, it
-  answers there from then on, when mentioned. With several, someone picks one with `chose/4`.
-  `answers/4` has the agent answer every message, or only mentions again, and `left/3` unbinds the
-  room. Each change is recorded in the audit as `wardrik.room.bound` or `wardrik.room.unbound`,
-  with who made it, where the adapter knows.
+      # The bot was invited into the room
+      WardrikChannel.Rooms.joined(workspace, room, member)
+      #=> {:bound, binding, offer}  # one agent offered; it now answers when mentioned
+      #=> {:choose, offers}         # several offered; show them to pick from
+      #=> :none                     # none offered
+
+      # Someone picked an agent
+      {:ok, binding, offer} = WardrikChannel.Rooms.chose(workspace, room, "acme/triage", member)
+
+      # Answer every message, not only mentions
+      {:ok, binding} = WardrikChannel.Rooms.answers(workspace, room, :everything, member)
+
+      # The bot left the room
+      :ok = WardrikChannel.Rooms.left(workspace, room, member)
+
+  Each change is recorded in the audit as `wardrik.room.bound` or `wardrik.room.unbound`. Pass the
+  `member` who made it, or `nil` if the adapter doesn't know.
   """
 
   alias Wardrik.Channel.Installation
@@ -16,12 +28,14 @@ defmodule WardrikChannel.Rooms do
   alias WardrikChannel.Replies
   alias WardrikChannel.Workspace
 
-  @typedoc "What a room shows once its bot arrives: its agent, the agents to pick from, or none."
+  @typedoc "What a room shows once its bot joins: its agent, agents to pick from, or none."
   @type shown() :: {:bound, Binding.t(), Offer.t()} | {:choose, [Offer.t()]} | :none
 
   @doc """
-  Returns what `room` is bound to, where its agent is still the installation owner's. A workspace
-  added again for another owner keeps none of its rooms' agents.
+  Returns `room`'s binding, or `nil` if it has none.
+
+  Returns `nil` too if the agent isn't the installation owner's. So a workspace added again for
+  another owner keeps none of its rooms' agents.
   """
   @spec get(Workspace.t(), String.t()) :: Binding.t() | nil
   def get(%Workspace{installation: installation} = workspace, room) do
@@ -34,7 +48,7 @@ defmodule WardrikChannel.Rooms do
     end
   end
 
-  @doc "Binds `room` to the one agent the workspace offers, or returns the agents to pick from."
+  @doc "Binds `room` to the agent the workspace offers, if there's one. Else returns the choices."
   @spec joined(Workspace.t(), String.t(), Member.t() | nil) :: shown()
   def joined(workspace, room, by \\ nil) do
     case Workspace.offered(workspace) do
@@ -53,7 +67,7 @@ defmodule WardrikChannel.Rooms do
     end
   end
 
-  @doc "Binds `room` to `agent`, answering when mentioned, where the workspace offers it."
+  @doc "Binds `room` to `agent`, answering when mentioned. Returns `{:error, :not_offered}` if the workspace doesn't offer it."
   @spec chose(Workspace.t(), String.t(), String.t(), Member.t() | nil) ::
           {:ok, Binding.t(), Offer.t()} | {:error, :not_offered}
   def chose(workspace, room, agent, by \\ nil) do
@@ -63,7 +77,7 @@ defmodule WardrikChannel.Rooms do
     end
   end
 
-  @doc "Changes when the agent bound to `room` answers: when mentioned, or to every message."
+  @doc "Sets whether `room`'s agent answers `:mentions` or `:everything`. Returns `{:error, :not_bound}` if no agent is bound."
   @spec answers(Workspace.t(), String.t(), Binding.answers(), Member.t() | nil) ::
           {:ok, Binding.t()} | {:error, :not_bound}
   def answers(workspace, room, answers, by \\ nil) when answers in [:mentions, :everything] do
@@ -73,7 +87,7 @@ defmodule WardrikChannel.Rooms do
     end
   end
 
-  @doc "Unbinds `room`, so no agent answers there, and nothing more is posted in its threads."
+  @doc "Unbinds `room`. No agent answers there, and nothing more is posted in its threads."
   @spec left(Workspace.t(), String.t(), Member.t() | nil) :: :ok
   def left(workspace, room, by \\ nil) do
     case get(workspace, room) do
@@ -92,7 +106,7 @@ defmodule WardrikChannel.Rooms do
   def started?(workspace, room, thread),
     do: WardrikStore.get(store(workspace), thread_key(workspace, room, thread)) != nil
 
-  @doc "Notes that the room's agent answers in `thread`."
+  @doc "Marks `thread` as one the room's agent answers in."
   @spec start(Workspace.t(), String.t(), String.t()) :: :ok
   def start(workspace, room, thread) do
     {:ok, _vsn} = WardrikStore.put(store(workspace), thread_key(workspace, room, thread), true)

@@ -1,8 +1,15 @@
 defmodule WardrikChannel.Channel do
   @moduledoc """
-  A channel is one chat app a Wardrik runs, by the name it gives it: its adapter, its options, and
-  the installations that say where it's added. The Wardrik hands it the `Wardrik.Server` that runs
-  its operations, the events it follows and records changes in, and the vault it seals tokens in.
+  One chat app Wardrik runs, under the name it's given.
+
+  Holds the adapter, the adapter's own options, and the installations that say where it's added.
+  Wardrik passes it the rest:
+
+    * `:server` - the `Wardrik.Server` that runs operations.
+    * `:wardrik` - the instance.
+    * `:events` - where events are followed and recorded.
+    * `:store` - Wardrik's store.
+    * `:vault` - where tokens are sealed. `nil` without Wardrik's `:keys`.
   """
 
   alias Wardrik.Channel.Installation
@@ -54,8 +61,11 @@ defmodule WardrikChannel.Channel do
         }
 
   @doc """
-  Builds the channel `adapter` runs from the options the Wardrik hands it. Raises where its name
-  isn't lower-case letters, digits and `-`, or where it says nothing of where it's added.
+  Builds `adapter`'s channel from the options Wardrik passes it. See `WardrikChannel` for the
+  options.
+
+  Raises `ArgumentError` if the name isn't lower-case letters, digits and `-`, starting with a
+  letter, or if the options give neither or both of `:token` and `:installations`.
   """
   @spec new(module(), keyword()) :: t()
   def new(adapter, opts) do
@@ -81,14 +91,16 @@ defmodule WardrikChannel.Channel do
     }
   end
 
-  @doc "Finds the channel's installation in `workspace`, as the chat app names it."
+  @doc "Returns the channel's installation in `workspace`, as the chat app names it."
   @spec installation(t(), String.t()) :: {:ok, Installation.t()} | :error
   def installation(%__MODULE__{name: name, installations: {module, config}}, workspace),
     do: module.fetch(config, name, workspace)
 
   @doc """
-  Returns the installation nearest the agent `id`'s owner: one of its user, as `acme/@jon`, then
-  one of its org, as `acme`. Returns `:error` where the channel is added to neither's workspace.
+  Returns the installation nearest the owner of agent `id`.
+
+  Looks first for one owned by the user, as `acme/@jon`, then by the org, as `acme`. Returns
+  `:error` if there's neither.
   """
   @spec nearest(t(), String.t()) :: {:ok, Installation.t()} | :error
   def nearest(%__MODULE__{name: name, installations: {module, config}}, id) do
@@ -101,12 +113,12 @@ defmodule WardrikChannel.Channel do
     end
   end
 
-  @doc "Keeps `installation`, in place of any of the same workspace."
+  @doc "Saves `installation`, replacing any for the same workspace."
   @spec install(t(), Installation.t()) :: :ok | {:error, String.t()}
   def install(%__MODULE__{installations: {module, config}}, installation),
     do: module.put(config, installation)
 
-  @doc "Forgets the channel's installation in `workspace`, as when the app is taken out of it."
+  @doc "Forgets the channel's installation in `workspace`."
   @spec uninstall(t(), String.t()) :: :ok
   def uninstall(%__MODULE__{name: name, installations: {module, config}}, workspace),
     do: module.delete(config, name, workspace)

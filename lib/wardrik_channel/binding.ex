@@ -1,7 +1,9 @@
 defmodule WardrikChannel.Binding do
   @moduledoc """
-  A binding is the agent that answers in a room, and when: when mentioned, `:mentions`, or to
-  every message, `:everything`.
+  The agent that answers in a room, and when.
+
+  `answers` is `:mentions`, to answer only when mentioned, or `:everything`, to answer every
+  message. `:mentions` unless set.
   """
 
   @enforce_keys [:room, :agent]

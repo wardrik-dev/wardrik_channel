@@ -1,11 +1,14 @@
 defmodule WardrikChannel.Replies do
   @moduledoc """
-  Replies post what agents answer in each room's threads, from the agents' logs, so nothing they
-  answer is lost to a restart.
+  Posts agents' answers in each room's threads.
 
-  Each room is one process in the cluster, a `WardrikChannel.Replies.Server`, kept in the
-  Wardrik's store. It posts what a run answered, what the agent is doing while it works, the calls
-  it waits on, who decided them, why a run failed, and that a run stopped.
+  Each room has one `WardrikChannel.Replies.Server` in the cluster, kept in Wardrik's store. It
+  reads the agents' logs, so no answer is lost to a restart. It posts:
+
+    * what a run answered
+    * what the agent is doing while it works
+    * the calls it waits on, and who decided them
+    * why a run failed, or that it stopped
   """
 
   alias WardrikChannel.Channel
@@ -13,7 +16,7 @@ defmodule WardrikChannel.Replies do
   alias WardrikChannel.Replies.State
   alias WardrikChannel.Workspace
 
-  @doc "Returns the supervisor the channel's rooms run under."
+  @doc "Returns the child spec of the supervisor the channel's rooms run under."
   @spec child_spec(Channel.t()) :: Supervisor.child_spec()
   def child_spec(%Channel{} = channel) do
     [
@@ -26,7 +29,7 @@ defmodule WardrikChannel.Replies do
     |> Map.put(:id, __MODULE__)
   end
 
-  @doc "Starts posting in `room`'s threads, unless it's posting already."
+  @doc "Starts posting in `room`'s threads. Does nothing if it already is."
   @spec follow(Workspace.t(), String.t()) :: :ok
   def follow(%Workspace{channel: channel, installation: installation} = workspace, room) do
     child =
@@ -36,7 +39,7 @@ defmodule WardrikChannel.Replies do
     :ok
   end
 
-  @doc "Posts again the calls `conversation` waits on, in its thread of `room`."
+  @doc "Posts the calls `conversation` waits on again, in its thread of `room`."
   @spec remind(Workspace.t(), String.t(), String.t()) :: :ok
   def remind(%Workspace{channel: channel} = workspace, room, conversation) do
     case DurableServer.Supervisor.lookup(supervisor(channel), key(workspace, room)) do
@@ -45,7 +48,7 @@ defmodule WardrikChannel.Replies do
     end
   end
 
-  @doc "Stops posting in `room`, and forgets where it was."
+  @doc "Stops posting in `room` and deletes its saved position."
   @spec forget(Workspace.t(), String.t()) :: :ok
   def forget(%Workspace{channel: channel} = workspace, room) do
     _deleted =

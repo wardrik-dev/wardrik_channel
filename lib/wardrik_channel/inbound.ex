@@ -1,11 +1,13 @@
 defmodule WardrikChannel.Inbound do
   @moduledoc """
-  An inbound message is one someone posted in a room, as an adapter hands it to
-  `WardrikChannel.received/2`.
+  A message someone posted in a room. Adapters pass it to `WardrikChannel.received/2`.
 
-  `thread` is the thread it replies in, or `nil` where it starts one. `id` is unique in its room,
-  and the agent is asked under it, so a message handed over twice is answered once. `text` leaves
-  out any mention of the bot, and `mentioned?` says whether there was one.
+    * `:room` - the room it was posted in.
+    * `:thread` - the thread it replies in, or `nil` if it starts one.
+    * `:id` - unique in its room. A message passed twice is answered once.
+    * `:sender` - a `WardrikChannel.Member`.
+    * `:text` - the text, without any mention of the bot.
+    * `:mentioned?` - whether it mentioned the bot. `false` unless set.
   """
 
   @enforce_keys [:room, :id, :sender, :text]

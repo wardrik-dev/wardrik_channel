@@ -1,12 +1,13 @@
 defmodule WardrikChannel.Replies.Server do
   @moduledoc """
-  The process that posts in one room's threads. It follows the logs of every conversation in the
-  room, posts what each event asks for, and keeps the cursor past it, so after a restart it
-  carries on from there.
+  Posts in one room's threads.
 
-  A post the channel refuses is tried again, waiting longer each time up to a minute, and given up
-  with a warning after the eighth attempt. The thread's later posts wait behind it. A status is
-  shown at most once every two seconds a thread, and never tried again.
+  Follows the logs of every conversation in the room and posts what each event asks for. It saves
+  its cursor after each post, so it carries on from there after a restart.
+
+  A failed post is retried with backoff, up to a minute between tries. After eight attempts it's
+  dropped with a warning. Later posts wait behind it. Statuses are shown at most once every two
+  seconds per thread, and are never retried.
   """
 
   use DurableServer, vsn: 1

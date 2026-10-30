@@ -1,14 +1,15 @@
 defmodule WardrikChannel.Supervisor do
   @moduledoc """
-  Runs a channel: the processes that post in its rooms, then what its adapter runs, such as a
-  connection to the chat app.
+  Runs a channel.
+
+  Starts the processes that post in its rooms, then the adapter's `c:WardrikChannel.children/1`.
   """
 
   use Supervisor
 
   alias WardrikChannel.Channel
 
-  @doc "Starts the channel `adapter` runs, with the options the Wardrik hands it."
+  @doc "Starts `adapter`'s channel with the options Wardrik passes it."
   @spec start_link({module(), keyword()}) :: Supervisor.on_start()
   def start_link({adapter, opts}),
     do: Supervisor.start_link(__MODULE__, Channel.new(adapter, opts))

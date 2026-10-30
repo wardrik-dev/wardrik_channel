@@ -1,8 +1,14 @@
 defmodule WardrikChannel.Replies.State do
   @moduledoc """
-  The state of one room's replies: the cursor past what's posted, and, for each conversation in
-  the room, the run under way, the messages it answers and who asked, and the arguments of its
-  calls. The channel, the last status shown in each thread and the follower aren't kept.
+  The state of one room's replies.
+
+  Saved between restarts:
+
+    * the cursor past what's posted
+    * for each conversation, the run under way, the messages it answers and who asked
+    * the arguments of each conversation's calls
+
+  Not saved: the channel, the follower, and when each thread's last status was shown.
   """
 
   @kept [:workspace, :room, :cursor, :senders, :runs, :calls]
@@ -35,9 +41,8 @@ defmodule WardrikChannel.Replies.State do
         }
 
   @typedoc """
-  What an event asks to be posted in its thread: what a run answered and the messages it answers,
-  what the agent is doing, the calls it waits on with who asked, why a run failed, that a run
-  stopped before it answered, a line about a decision, or nothing.
+  What an event asks to post in its thread. `:none` posts nothing. The rest match
+  `t:WardrikChannel.Outbound.body/0`, except `{:waiting, interrupt_ids, asked_by}`.
   """
   @type post() ::
           {:reply, String.t(), [String.t()]}
@@ -52,24 +57,24 @@ defmodule WardrikChannel.Replies.State do
   @spec new(String.t(), String.t()) :: t()
   def new(workspace, room), do: %__MODULE__{workspace: workspace, room: room}
 
-  @doc "Returns what of `state` is kept between restarts."
+  @doc "Returns the part of `state` saved between restarts."
   @spec dump(t()) :: map()
   def dump(state), do: Map.take(state, @kept)
 
-  @doc "Returns the state kept as `dumped`."
+  @doc "Restores the state from `dump/1`'s result."
   @spec load(map()) :: t()
   def load(dumped), do: struct!(__MODULE__, dumped)
 
-  @doc "Returns what `event` of `conversation` asks to be posted, and the state once it is."
+  @doc "Returns what `event` of `conversation` asks to post, and the updated state."
   @spec take(t(), String.t(), Wardrik.Event.t()) :: {post(), t()}
   def take(state, conversation, %Wardrik.Event{type: "wardrik." <> type, data: data}),
     do: taken(state, conversation, type, data)
 
-  @doc "Returns the arguments of the call `id` in `conversation`, where they're known."
+  @doc "Returns the arguments of call `id` in `conversation`, or `nil` if unknown."
   @spec arguments(t(), String.t(), String.t() | nil) :: term()
   def arguments(state, conversation, id), do: get_in(state.calls, [conversation, id])
 
-  @doc "Returns who asked for the run under way in `conversation`, where it's known."
+  @doc "Returns who asked for the run under way in `conversation`, or `nil` if unknown."
   @spec asked_by(t(), String.t()) :: String.t() | nil
   def asked_by(state, conversation), do: get_in(state.runs, [conversation, :asked_by])
 

@@ -1,5 +1,5 @@
 defmodule WardrikChannel.Offer do
-  @moduledoc "An offer is an agent a channel may have answer in its rooms, with what it's for."
+  @moduledoc "An agent that may answer in a channel's rooms, with its name and description."
 
   @enforce_keys [:agent]
   defstruct [:agent, :name, :description]

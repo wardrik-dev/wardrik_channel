@@ -1,8 +1,11 @@
 defmodule WardrikChannel.Installations.Token do
   @moduledoc """
-  The one installation a channel's `token:` makes, in whichever workspace that token reaches. It
-  takes `:token`, `:owner`, whose agents answer there, and `:approvers`. Adding or forgetting
-  others is refused. Found by its owner, its workspace is `*`, whichever the token reaches.
+  The single installation a channel's `token:` makes, in the workspace that token reaches.
+
+      slack: {WardrikSlack, token: "xoxb-...", owner: "acme", approvers: ["@maria"]}
+
+  Adding other installations returns an error. Forgetting one does nothing. Found by its owner,
+  its workspace is `"*"`.
   """
 
   @behaviour Wardrik.Channel.Installations

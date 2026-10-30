@@ -1,12 +1,16 @@
 defmodule WardrikChannel.Workspace do
   @moduledoc """
-  A workspace is a channel as it acts in one place it's added to, such as one Slack workspace. An
-  adapter makes one for each thing it hears, with `WardrikChannel.workspace/2`.
+  A channel in one place it's added to, such as one Slack workspace.
 
-  Its people act through Wardrik as themselves. Each may read and message the agents of the
-  installation's owner, and its approvers may decide what those agents wait on. Whether someone is
-  an approver is asked of the adapter only as they decide. The agents it
-  offers are the owner's whose definitions list the channel among their `channels`.
+  Adapters get one for each request with `WardrikChannel.workspace/2`.
+
+  People in the workspace act in Wardrik as themselves:
+
+    * Everyone may read and message the installation owner's agents.
+    * Approvers may also decide what those agents wait on. The adapter is asked whether someone
+      is an approver only when they decide.
+
+  The workspace offers the owner's agents whose definitions list the channel in `channels`.
   """
 
   alias Wardrik.AgentID
@@ -22,14 +26,14 @@ defmodule WardrikChannel.Workspace do
 
   @type t() :: %__MODULE__{channel: Channel.t(), installation: Installation.t()}
 
-  @doc "Returns the channel in the workspace the chat app names `id`, or `:error` where it isn't added there."
+  @doc "Returns the channel in workspace `id`, or `:error` if it isn't added there."
   @spec new(Channel.t(), String.t()) :: {:ok, t()} | :error
   def new(%Channel{} = channel, id) do
     with {:ok, installation} <- Channel.installation(channel, id),
          do: {:ok, %__MODULE__{channel: channel, installation: installation}}
   end
 
-  @doc "Returns the scope the channel itself reads the owner's agents in."
+  @doc "Returns the channel's own scope. It may read the owner's agents."
   @spec scope(t()) :: Wardrik.Scope.t()
   def scope(%__MODULE__{channel: channel, installation: installation}) do
     principal = %Principal{id: channel.name <> ":" <> installation.workspace}
@@ -37,7 +41,7 @@ defmodule WardrikChannel.Workspace do
     Wardrik.Scope.new(channel.server, channel.wardrik, principal, grants)
   end
 
-  @doc "Returns the scope `member` acts in: they read and message the owner's agents."
+  @doc "Returns `member`'s scope. They may read and message the owner's agents."
   @spec member_scope(t(), Member.t()) :: Wardrik.Scope.t()
   def member_scope(%__MODULE__{channel: channel, installation: installation} = workspace, member) do
     agents = Installation.agents(installation)
@@ -46,8 +50,11 @@ defmodule WardrikChannel.Workspace do
   end
 
   @doc """
-  Returns the scope `member` decides in: an approver decides what the owner's agents wait on, and
-  anyone else only what `conversation` waits on, where they asked for its turn as `asked_by` says.
+  Returns the scope `member` decides calls in.
+
+    * An approver may decide what any of the owner's agents wait on.
+    * Whoever `asked_by` names may decide what `conversation` waits on.
+    * Anyone else gets `member_scope/2`, and may decide nothing.
   """
   @spec deciding_scope(t(), Member.t(), String.t(), String.t() | nil) :: Wardrik.Scope.t()
   def deciding_scope(
@@ -81,7 +88,7 @@ defmodule WardrikChannel.Workspace do
     %Principal{id: id, attributes: %{name: member.name}}
   end
 
-  @doc "Returns whether `member` is among the installation's approvers."
+  @doc "Returns whether `member` is one of the installation's approvers."
   @spec approver?(t(), Member.t()) :: boolean()
   def approver?(%__MODULE__{installation: %Installation{approvers: :anyone}}, _member), do: true
   def approver?(%__MODULE__{installation: %Installation{approvers: []}}, _member), do: false
@@ -89,7 +96,7 @@ defmodule WardrikChannel.Workspace do
   def approver?(%__MODULE__{channel: channel, installation: installation}, member),
     do: channel.adapter.include?(channel, installation, installation.approvers, member)
 
-  @doc "Returns the agents the workspace may have answer in its rooms, sorted by ID."
+  @doc "Returns the agents that may answer in the workspace's rooms, sorted by ID."
   @spec offered(t()) :: [Offer.t()]
   def offered(%__MODULE__{installation: installation} = workspace) do
     scope = scope(workspace)
@@ -131,7 +138,7 @@ defmodule WardrikChannel.Workspace do
     String.replace_prefix(held, prefix(workspace, room), "")
   end
 
-  @doc "Returns the pattern of the logs of every conversation in `room`, whichever agent holds it."
+  @doc "Returns a pattern matching the logs of every conversation in `room`, for any agent."
   @spec logs(t(), String.t()) :: String.t()
   def logs(%__MODULE__{installation: installation} = workspace, room),
     do: installation.owner <> "/*/" <> prefix(workspace, room) <> "*"

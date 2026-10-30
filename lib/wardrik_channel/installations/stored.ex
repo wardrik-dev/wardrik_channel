@@ -1,9 +1,12 @@
 defmodule WardrikChannel.Installations.Stored do
   @moduledoc """
-  Installations kept in the Wardrik: each workspace's owner and approvers in its store, and its
-  token sealed in its vault, as a secret of the owner's. A channel takes them as
-  `installations: :stored`, for one app added to many workspaces, one for each org. The Wardrik
-  needs `:keys` to seal tokens with.
+  Keeps installations in Wardrik, for one app added to many workspaces.
+
+      slack: {WardrikSlack, installations: :stored, ...}
+
+  Each workspace's owner and approvers go in Wardrik's store. Its token is sealed in the vault, as
+  a secret of the owner's. Wardrik needs `:keys` to seal tokens. Without them, saving fails and no
+  installation is found.
   """
 
   @behaviour Wardrik.Channel.Installations
