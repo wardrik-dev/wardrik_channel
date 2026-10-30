@@ -5,7 +5,7 @@ defmodule WardrikChannel do
   A *channel* is one chat app Wardrik runs, under a name you choose. A *room* is a place in it,
   such as a Slack channel.
 
-      config :my_app, MyApp.Wardrik,
+      config :my_app, MyApp.AgentRuntime,
         channels: [
           slack: {WardrikSlack, token: "xoxb-...", signing_secret: "...", owner: "acme", approvers: ["@maria"]}
         ]

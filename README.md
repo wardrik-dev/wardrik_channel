@@ -30,11 +30,11 @@ A channel is one chat app Wardrik runs, under a name you choose. Give it a token
 whose agents answer there:
 
 ```elixir
-defmodule MyApp.Wardrik do
+defmodule MyApp.AgentRuntime do
   use Wardrik, otp_app: :my_app
 end
 
-config :my_app, MyApp.Wardrik,
+config :my_app, MyApp.AgentRuntime,
   channels: [
     slack:
       {WardrikSlack,
@@ -48,13 +48,13 @@ config :my_app, MyApp.Wardrik,
 The chat app posts to `POST /v1/channels/slack/{path}`. Serve it with `Wardrik.HTTP`:
 
 ```elixir
-forward "/", Wardrik.HTTP, wardrik: MyApp.Wardrik
+forward "/", Wardrik.HTTP, wardrik: MyApp.AgentRuntime
 ```
 
 List the channel in an agent's definition:
 
 ```elixir
-scope = MyApp.Wardrik.as("acme/@maria", roles: [:owner], resources: ["acme/*"])
+scope = MyApp.AgentRuntime.as("acme/@maria", roles: [:owner], resources: ["acme/*"])
 
 Wardrik.Agent.define(scope, "acme/triage",
   model: "anthropic:claude-haiku-4-5",
