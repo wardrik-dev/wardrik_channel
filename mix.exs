@@ -4,7 +4,7 @@ defmodule WardrikChannel.MixProject do
   def project do
     [
       app: :wardrik_channel,
-      version: "0.1.0-rc.1",
+      version: "0.1.0-rc.2",
       elixir: "~> 1.20",
       description:
         "Chat apps people reach Wardrik's agents through, such as Slack: rooms, threads, replies and approvals.",
@@ -59,13 +59,13 @@ defmodule WardrikChannel.MixProject do
 
   defp deps do
     [
-      sibling(:wardrik_protocol),
-      sibling(:wardrik_events),
-      sibling(:wardrik_vault),
-      sibling(:wardrik_store),
+      sibling(:wardrik_protocol, "~> 0.1.0-rc.2"),
+      sibling(:wardrik_events, "~> 0.1.0-rc.1"),
+      sibling(:wardrik_vault, "~> 0.1.0-rc.1"),
+      sibling(:wardrik_store, "~> 0.1.0-rc.1"),
       {:durable_server, "~> 0.1.6"},
       {:nimble_options, "~> 1.1"},
-      sibling(:wardrik_testing, only: :test),
+      sibling(:wardrik_testing, "~> 0.1.0-rc.1", only: :test),
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
@@ -78,9 +78,9 @@ defmodule WardrikChannel.MixProject do
 
   # Wardrik's own packages come from Hex, or from their checkouts beside this one with
   # WARDRIK_LOCAL=1.
-  defp sibling(name, opts \\ []) do
+  defp sibling(name, requirement, opts \\ []) do
     if System.get_env("WARDRIK_LOCAL"),
       do: {name, Keyword.put(opts, :path, "../#{name}")},
-      else: {name, "~> 0.1.0-rc.1", opts}
+      else: {name, requirement, opts}
   end
 end
