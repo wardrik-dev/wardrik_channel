@@ -130,9 +130,9 @@ defmodule WardrikChannel.Channel do
   @spec nearest(t(), String.t()) :: {:ok, Installation.t()} | :error
   def nearest(%__MODULE__{name: name, installations: {module, config}}, id) do
     {:ok, %Wardrik.AgentID{owner: owner}} = Wardrik.AgentID.parse(id)
-    [org | _rest] = String.split(owner, "/", parts: 2)
+    owners = List.delete(Wardrik.Owners.chain(owner), Wardrik.Resource.deployment())
 
-    case Enum.flat_map(Enum.uniq([owner, org]), &module.owned(config, name, &1)) do
+    case Enum.flat_map(owners, &module.owned(config, name, &1)) do
       [installation | _rest] -> {:ok, installation}
       [] -> :error
     end
