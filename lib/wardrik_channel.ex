@@ -23,18 +23,11 @@ defmodule WardrikChannel do
 
   Every channel takes these. Its adapter reads the rest.
 
-    * `:token` - the token the channel acts with, in the one workspace it reaches. Needs `:owner`.
-    * `:owner` - whose agents answer, as `"acme"`.
-    * `:installations` - instead of `:token`, to add one app to many workspaces. Either `:stored`,
-      to keep them in Wardrik (needs Wardrik's `:keys`), or `{module, config}`, a
-      `Wardrik.Channel.Installations`.
-    * `:approvers` - who may decide what agents wait on, as the chat app names people, or
-      `:anyone`. `[]` unless set. Whoever asked for a turn may always decide it.
-    * `:offering` - what a room with no agent is told.
-    * `:deciding` - what someone who may not decide is told.
+  #{NimbleOptions.docs(WardrikChannel.Channel.schema())}
 
-  Raises `ArgumentError` on start if neither or both of `:token` and `:installations` are given,
-  or if the channel's name isn't lower-case letters, digits and `-`, starting with a letter.
+  Raises on start if an option is invalid, if neither or both of `:token` and `:installations`
+  are given, or if the channel's name isn't lower-case letters, digits and `-`, starting with a
+  letter.
 
   ## Writing an adapter
 

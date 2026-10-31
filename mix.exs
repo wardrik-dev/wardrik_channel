@@ -64,6 +64,7 @@ defmodule WardrikChannel.MixProject do
       sibling(:wardrik_vault),
       sibling(:wardrik_store),
       {:durable_server, "~> 0.1.6"},
+      {:nimble_options, "~> 1.1"},
       sibling(:wardrik_testing, only: :test),
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

@@ -253,17 +253,20 @@ defmodule WardrikChannelTest do
 
   describe "channels" do
     test "is named in lower-case letters, digits and -, and says where it's added" do
+      passed = [server: S, wardrik: :w, events: :e, store: nil]
+
       assert_raise ArgumentError, ~r/lower-case/, fn ->
-        WardrikChannel.channel(WardrikChannel.Test.Chat, channel: "Chat", token: "t")
+        WardrikChannel.channel(WardrikChannel.Test.Chat, [channel: "Chat", token: "t"] ++ passed)
       end
 
       assert_raise ArgumentError, ~r/token/, fn ->
-        WardrikChannel.channel(WardrikChannel.Test.Chat,
-          channel: "chat",
-          server: S,
-          wardrik: :w,
-          events: :e,
-          store: nil
+        WardrikChannel.channel(WardrikChannel.Test.Chat, [channel: "chat"] ++ passed)
+      end
+
+      assert_raise NimbleOptions.ValidationError, ~r/:approvers/, fn ->
+        WardrikChannel.channel(
+          WardrikChannel.Test.Chat,
+          [channel: "chat", token: "t", owner: "acme", approvers: "@maria"] ++ passed
         )
       end
     end
