@@ -16,20 +16,39 @@ defmodule WardrikChannel.Channel do
   alias WardrikChannel.Installations.Stored
   alias WardrikChannel.Installations.Token
 
-  @own [
-    :server,
-    :wardrik,
-    :events,
-    :vault,
-    :channel,
-    :store,
-    :token,
-    :owner,
-    :approvers,
-    :installations,
-    :offering,
-    :deciding
+  @options [
+    token: [
+      type: {:or, [:string, nil]},
+      doc: "The token the channel acts with, in the one workspace it reaches. Needs `:owner`."
+    ],
+    owner: [type: :string, doc: "Whose agents answer, as `\"acme\"`."],
+    installations: [
+      type: {:or, [{:in, [:stored]}, {:tuple, [:atom, :any]}]},
+      doc: """
+      Instead of `:token`, to add one app to many workspaces. `:stored` keeps them in Wardrik,
+      which needs Wardrik's `:keys`. `{module, config}` names a
+      `Wardrik.Channel.Installations`.
+      """
+    ],
+    approvers: [
+      type: {:or, [{:list, :string}, {:in, [:anyone]}]},
+      default: [],
+      doc: """
+      Who may decide what agents wait on, as the chat app names people, or `:anyone`. Whoever
+      asked for a turn may always decide it.
+      """
+    ],
+    offering: [type: :string, doc: "What a room with no agent is told."],
+    deciding: [type: :string, doc: "What someone who may not decide is told."],
+    server: [type: :atom, required: true, doc: false],
+    wardrik: [type: :atom, required: true, doc: false],
+    events: [type: :atom, required: true, doc: false],
+    vault: [type: {:or, [:atom, nil]}, default: nil, doc: false],
+    channel: [type: :string, required: true, doc: false],
+    store: [type: :any, required: true, doc: false]
   ]
+
+  @schema NimbleOptions.new!(@options)
 
   @enforce_keys [
     :name,
@@ -62,34 +81,40 @@ defmodule WardrikChannel.Channel do
 
   @doc """
   Builds `adapter`'s channel from the options Wardrik passes it. See `WardrikChannel` for the
-  options.
+  options. The adapter reads the ones left over, from `:options`.
 
-  Raises `ArgumentError` if the name isn't lower-case letters, digits and `-`, starting with a
-  letter, or if the options give neither or both of `:token` and `:installations`.
+  Raises `NimbleOptions.ValidationError` on invalid options, or `ArgumentError` if the name isn't
+  lower-case letters, digits and `-`, starting with a letter, or the options give neither or both
+  of `:token` and `:installations`.
   """
   @spec new(module(), keyword()) :: t()
   def new(adapter, opts) do
-    name = Keyword.fetch!(opts, :channel)
+    {own, options} = Keyword.split(opts, Keyword.keys(@options))
+    own = NimbleOptions.validate!(own, @schema)
+    name = Keyword.fetch!(own, :channel)
     named!(name)
-    installations = installations!(name, opts)
-    vault = Keyword.get(opts, :vault)
-    store = WardrikStore.scope(Keyword.fetch!(opts, :store), "wardrik_channel")
+    installations = installations!(name, own)
+    vault = own[:vault]
+    store = WardrikStore.scope(own[:store], "wardrik_channel")
 
     %__MODULE__{
       name: name,
-      server: Keyword.fetch!(opts, :server),
-      wardrik: Keyword.fetch!(opts, :wardrik),
-      events: Keyword.fetch!(opts, :events),
+      server: own[:server],
+      wardrik: own[:wardrik],
+      events: own[:events],
       vault: vault,
       adapter: adapter,
       store: store,
       installations: stored(installations, vault, store),
-      offering: Keyword.get(opts, :offering, offering(name)),
-      deciding: Keyword.get(opts, :deciding, deciding()),
-      approvers: Keyword.get(opts, :approvers, []),
-      options: Keyword.drop(opts, @own)
+      offering: Keyword.get(own, :offering, offering(name)),
+      deciding: Keyword.get(own, :deciding, deciding()),
+      approvers: own[:approvers],
+      options: options
     }
   end
+
+  @doc false
+  def schema, do: @schema
 
   @doc "Returns the channel's installation in `workspace`, as the chat app names it."
   @spec installation(t(), String.t()) :: {:ok, Installation.t()} | :error
