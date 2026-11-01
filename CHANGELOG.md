@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-rc.2 (2026-10-31)
+
+- A channel's nearest installation is found along `Wardrik.Owners.chain/1`: the agent's owner,
+  then their org.
+- Options are validated with NimbleOptions, and documented from the schema. An adapter reads the
+  ones left over from `:options`.
+
+### Breaking
+
+- `WardrikChannel.Channel.new/2` raises `NimbleOptions.ValidationError` on an invalid option.
+
 ## 0.1.0-rc.1 (2026-10-30)
 
 - Channels as adapters: `use WardrikChannel`, with `deliver/2`, `include?/4` and `children/1`.

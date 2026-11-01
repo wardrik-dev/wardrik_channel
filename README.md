@@ -13,7 +13,7 @@ Add an adapter. It brings this package in.
 ```elixir
 def deps do
   [
-    {:wardrik_slack, "~> 0.1.0-rc.1"}
+    {:wardrik_slack, "~> 0.1.0-rc.2"}
   ]
 end
 ```
@@ -21,7 +21,7 @@ end
 To write an adapter of your own, depend on this package directly:
 
 ```elixir
-{:wardrik_channel, "~> 0.1.0-rc.1"}
+{:wardrik_channel, "~> 0.1.0-rc.2"}
 ```
 
 ## Wire it up
