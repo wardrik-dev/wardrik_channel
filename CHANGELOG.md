@@ -9,6 +9,7 @@
 
 ### Breaking
 
+- An install's token is sealed as a `:token`, and read only as one.
 - `WardrikChannel.Channel.new/2` raises `NimbleOptions.ValidationError` on an invalid option.
 
 ## 0.1.0-rc.1 (2026-10-30)

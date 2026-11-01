@@ -79,14 +79,16 @@ defmodule WardrikChannel.Installations.Stored do
   defp sealed(config, owner, name), do: config |> vault() |> sealed_in(owner, name)
 
   defp sealed_in(nil, _owner, _name), do: {:error, :no_keys}
-  defp sealed_in(vault, owner, name), do: WardrikVault.fetch(vault, %Principal{id: owner}, name)
+
+  defp sealed_in(vault, owner, name),
+    do: WardrikVault.fetch(vault, %Principal{id: owner}, name, kind: :token)
 
   defp seal(config, owner, name, token), do: config |> vault() |> seal_in(owner, name, token)
 
   defp seal_in(nil, _owner, _name, _token), do: {:error, :no_keys}
 
   defp seal_in(vault, owner, name, token),
-    do: WardrikVault.put(vault, %Principal{id: owner}, name, token)
+    do: WardrikVault.put(vault, %Principal{id: owner}, name, token, kind: :token)
 
   defp unseal(config, owner, name), do: config |> vault() |> unseal_in(owner, name)
 

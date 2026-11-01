@@ -61,7 +61,7 @@ defmodule WardrikChannel.MixProject do
     [
       sibling(:wardrik_protocol, "~> 0.1.0-rc.2"),
       sibling(:wardrik_events, "~> 0.1.0-rc.1"),
-      sibling(:wardrik_vault, "~> 0.1.0-rc.1"),
+      sibling(:wardrik_vault, "~> 0.1.0-rc.2"),
       sibling(:wardrik_store, "~> 0.1.0-rc.1"),
       {:durable_server, "~> 0.1.6"},
       {:nimble_options, "~> 1.1"},
