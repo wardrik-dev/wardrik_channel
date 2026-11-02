@@ -16,6 +16,7 @@ defmodule WardrikChannel.Workspace do
   alias Wardrik.AgentID
   alias Wardrik.Channel.Installation
   alias Wardrik.Statement
+  alias WardrikChannel.Answer
   alias WardrikChannel.Channel
   alias WardrikChannel.Member
   alias WardrikChannel.Offer
@@ -60,18 +61,16 @@ defmodule WardrikChannel.Workspace do
   end
 
   @doc """
-  Returns the scope `member` decides calls in.
+  Returns the scope `answer`'s member decides calls in.
 
     * An approver may decide what any of the owner's agents wait on.
-    * Whoever `asked_by` names may decide what `conversation` waits on.
+    * Whoever `asked_by` names may decide what the answer's conversation waits on.
     * Anyone else gets `member_scope/2`, and may decide nothing.
   """
-  @spec deciding_scope(t(), Member.t(), String.t(), String.t() | nil) :: Wardrik.Scope.t()
+  @spec deciding_scope(t(), Answer.t()) :: Wardrik.Scope.t()
   def deciding_scope(
         %__MODULE__{installation: installation} = workspace,
-        member,
-        conversation,
-        asked_by
+        %Answer{member: member, conversation: conversation, asked_by: asked_by}
       ) do
     scope = member_scope(workspace, member)
 
@@ -142,18 +141,36 @@ defmodule WardrikChannel.Workspace do
   end
 
   @doc """
-  Returns the ID of the conversation `agent` holds for `thread` of `room`, as
-  `acme/triage/slack.T0123.C024BE91L.1696.1234`.
-  """
-  @spec conversation(t(), String.t(), String.t(), String.t()) :: String.t()
-  def conversation(workspace, agent, room, thread),
-    do: agent <> "/" <> prefix(workspace, room) <> thread
+  Returns the ID of the conversation `:agent` holds for `:thread` of `:room`.
 
-  @doc "Returns the thread of `room` that `conversation` holds."
-  @spec thread(t(), String.t(), String.t()) :: String.t()
-  def thread(workspace, room, conversation) do
-    {:ok, %AgentID{conversation: held}} = AgentID.parse(conversation)
-    String.replace_prefix(held, prefix(workspace, room), "")
+      WardrikChannel.Workspace.conversation(workspace,
+        agent: "acme/triage",
+        room: "C024BE91L",
+        thread: "1696.1234"
+      )
+      #=> "acme/triage/slack.T0123.C024BE91L.1696.1234"
+  """
+  @spec conversation(t(), agent: String.t(), room: String.t(), thread: String.t()) :: String.t()
+  def conversation(workspace, opts) do
+    room = Keyword.fetch!(opts, :room)
+
+    Keyword.fetch!(opts, :agent) <>
+      "/" <> prefix(workspace, room) <> Keyword.fetch!(opts, :thread)
+  end
+
+  @doc """
+  Returns the thread of `:room` that `:conversation` holds.
+
+      WardrikChannel.Workspace.thread(workspace,
+        room: "C024BE91L",
+        conversation: "acme/triage/slack.T0123.C024BE91L.1696.1234"
+      )
+      #=> "1696.1234"
+  """
+  @spec thread(t(), room: String.t(), conversation: String.t()) :: String.t()
+  def thread(workspace, opts) do
+    {:ok, %AgentID{conversation: held}} = AgentID.parse(Keyword.fetch!(opts, :conversation))
+    String.replace_prefix(held, prefix(workspace, Keyword.fetch!(opts, :room)), "")
   end
 
   @doc "Returns a pattern matching the logs of every conversation in `room`, for any agent."

@@ -153,7 +153,8 @@ defmodule WardrikChannel.Replies.Server do
           do: %Waiting{
             conversation: conversation,
             interrupt: interrupt,
-            arguments: State.arguments(state, conversation, interrupt.tool_call_id),
+            arguments:
+              State.arguments(state, conversation: conversation, call: interrupt.tool_call_id),
             asked_by: asked_by
           }
     else
@@ -183,7 +184,7 @@ defmodule WardrikChannel.Replies.Server do
         outbound = %Outbound{
           installation: installation,
           room: state.room,
-          thread: Workspace.thread(workspace, state.room, conversation),
+          thread: Workspace.thread(workspace, room: state.room, conversation: conversation),
           body: body,
           approvers: installation.approvers
         }

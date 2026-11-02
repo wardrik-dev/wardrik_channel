@@ -63,19 +63,20 @@ defmodule WardrikChannel do
         end
 
         @impl WardrikChannel
-        def include?(_channel, _installation, names, member), do: member.id in names
+        def include?(%WardrikChannel.Membership{names: names, member: member}, _channel),
+          do: member.id in names
       end
 
-  Hand each button press to `decide/4`. `use WardrikChannel` defines `child_spec/1`,
+  Hand each button press to `decide/2`. `use WardrikChannel` defines `child_spec/1`,
   `c:children/1` and `c:Wardrik.Channel.notify/4`. Each can be overridden.
   """
 
   alias Wardrik.Channel.Installation
   alias Wardrik.Error
+  alias WardrikChannel.Answer
   alias WardrikChannel.Binding
   alias WardrikChannel.Channel
   alias WardrikChannel.Inbound
-  alias WardrikChannel.Member
   alias WardrikChannel.Outbound
   alias WardrikChannel.Replies
   alias WardrikChannel.Rooms
@@ -202,18 +203,18 @@ defmodule WardrikChannel do
   defp answers?(_workspace, _binding, %Inbound{thread: nil}, _thread), do: false
 
   defp answers?(workspace, binding, _inbound, thread),
-    do: Rooms.started?(workspace, binding.room, thread)
+    do: Rooms.started?(workspace, room: binding.room, thread: thread)
 
   defp ask(workspace, %Binding{room: room, agent: agent}, inbound, thread) do
-    conversation = Workspace.conversation(workspace, agent, room, thread)
+    conversation = Workspace.conversation(workspace, agent: agent, room: room, thread: thread)
     scope = Workspace.member_scope(workspace, inbound.sender)
 
-    with :ok <- Rooms.start(workspace, room, thread),
+    with :ok <- Rooms.start(workspace, room: room, thread: thread),
          :ok <- Replies.follow(workspace, room),
          waiting? = waiting?(workspace, conversation),
          {:ok, _message} <-
            Wardrik.Agent.ask(scope, conversation, content: inbound.text, id: inbound.id) do
-      if waiting?, do: Replies.remind(workspace, room, conversation)
+      if waiting?, do: Replies.remind(workspace, room: room, conversation: conversation)
       {:asked, conversation}
     else
       {:error, %Error{message: message}} -> {:error, message}
@@ -228,34 +229,30 @@ defmodule WardrikChannel do
   end
 
   @doc """
-  Approves or denies a call the agent waits on, as `member`.
+  Approves or denies a call the agent waits on, as `answer`'s member.
 
-      waiting = %{conversation: conversation, interrupt: "int_1", asked_by: nil}
-      WardrikChannel.decide(workspace, member, waiting, {:approve, "Looks fine."})
+      WardrikChannel.decide(workspace, %WardrikChannel.Answer{
+        member: member,
+        conversation: conversation,
+        interrupt: "int_1",
+        decision: {:approve, "Looks fine."}
+      })
       #=> {:ok, %Wardrik.Decision{}}
 
-  `waiting` is what the adapter put on the button, from a `WardrikChannel.Waiting`:
-
-    * `:conversation` - the conversation's ID.
-    * `:interrupt` - the interrupt's ID.
-    * `:asked_by` - who asked for the turn. Optional.
-
-  `answer` is `{:approve, note}` or `{:deny, reason}`. Either may be `nil`.
+  Build the `WardrikChannel.Answer` from what the adapter put on the button, from a
+  `WardrikChannel.Waiting`.
 
   Approvers may decide, and so may whoever asked. Anyone else gets `{:error, deciding}`, the
   channel's `:deciding` message.
   """
-  @spec decide(Workspace.t(), Member.t(), map(), {:approve | :deny, String.t() | nil}) ::
-          {:ok, Wardrik.Decision.t()} | {:error, String.t()}
+  @spec decide(Workspace.t(), Answer.t()) :: {:ok, Wardrik.Decision.t()} | {:error, String.t()}
   def decide(
         workspace,
-        member,
-        %{conversation: conversation, interrupt: interrupt} = waiting,
-        answer
+        %Answer{conversation: conversation, interrupt: interrupt, decision: decision} = answer
       ) do
-    scope = Workspace.deciding_scope(workspace, member, conversation, Map.get(waiting, :asked_by))
+    scope = Workspace.deciding_scope(workspace, answer)
 
-    case answered(scope, conversation, interrupt, answer) do
+    case answered(scope, conversation, interrupt, decision) do
       {:ok, [decision]} ->
         {:ok, decision}
 
