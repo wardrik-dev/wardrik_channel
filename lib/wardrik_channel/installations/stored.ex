@@ -14,6 +14,7 @@ defmodule WardrikChannel.Installations.Stored do
   alias Wardrik.Channel.Installation
   alias Wardrik.Channel.Installations.Request
   alias WardrikCore.Principal
+  alias WardrikVault.Secret
 
   @impl Wardrik.Channel.Installations
   def fetch(%Request{channel: channel, workspace: workspace}, config) do
@@ -93,8 +94,10 @@ defmodule WardrikChannel.Installations.Stored do
 
   defp seal_in(nil, _owner, _name, _token), do: {:error, :no_keys}
 
-  defp seal_in(vault, owner, name, token),
-    do: WardrikVault.put(vault, %Principal{id: owner}, name, token, kind: :token)
+  defp seal_in(vault, owner, name, token) do
+    secret = %Secret{principal: %Principal{id: owner}, name: name, value: token}
+    WardrikVault.put(vault, secret, kind: :token)
+  end
 
   defp unseal(config, owner, name), do: config |> vault() |> unseal_in(owner, name)
 

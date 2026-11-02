@@ -38,7 +38,12 @@ defmodule WardrikChannel.Workspace do
   def scope(%__MODULE__{channel: channel, installation: installation}) do
     principal = %Principal{id: channel.name <> ":" <> installation.workspace}
     grants = [Statement.new(roles: [:reader], resources: [Installation.agents(installation)])]
-    Wardrik.Scope.new(channel.server, channel.wardrik, principal, grants)
+
+    Wardrik.Scope.new(channel.server,
+      wardrik: channel.wardrik,
+      principal: principal,
+      grants: grants
+    )
   end
 
   @doc "Returns `member`'s scope. They may read and message the owner's agents."
@@ -46,7 +51,12 @@ defmodule WardrikChannel.Workspace do
   def member_scope(%__MODULE__{channel: channel, installation: installation} = workspace, member) do
     agents = Installation.agents(installation)
     grants = [Statement.new(roles: [:reader, :messenger], resources: [agents])]
-    Wardrik.Scope.new(channel.server, channel.wardrik, principal(workspace, member), grants)
+
+    Wardrik.Scope.new(channel.server,
+      wardrik: channel.wardrik,
+      principal: principal(workspace, member),
+      grants: grants
+    )
   end
 
   @doc """
