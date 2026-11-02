@@ -11,9 +11,10 @@ defmodule WardrikChannel.Installations.Token do
   @behaviour Wardrik.Channel.Installations
 
   alias Wardrik.Channel.Installation
+  alias Wardrik.Channel.Installations.Request
 
   @impl Wardrik.Channel.Installations
-  def fetch(config, channel, workspace) do
+  def fetch(%Request{channel: channel, workspace: workspace}, config) do
     {:ok,
      %Installation{
        channel: channel,
@@ -25,16 +26,16 @@ defmodule WardrikChannel.Installations.Token do
   end
 
   @impl Wardrik.Channel.Installations
-  def owned(config, channel, owner) do
+  def owned(%Request{channel: channel, owner: owner}, config) do
     if Keyword.fetch!(config, :owner) == owner,
-      do: [elem(fetch(config, channel, "*"), 1)],
+      do: [elem(fetch(%Request{channel: channel, workspace: "*"}, config), 1)],
       else: []
   end
 
   @impl Wardrik.Channel.Installations
-  def put(_config, %Installation{channel: channel}),
+  def put(%Installation{channel: channel}, _config),
     do: {:error, "#{channel} is added with its token, and in no other way."}
 
   @impl Wardrik.Channel.Installations
-  def delete(_config, _channel, _workspace), do: :ok
+  def delete(%Request{}, _config), do: :ok
 end

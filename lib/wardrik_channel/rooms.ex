@@ -9,7 +9,8 @@ defmodule WardrikChannel.Rooms do
       #=> :none                     # none offered
 
       # Someone picked an agent
-      {:ok, binding, offer} = WardrikChannel.Rooms.chose(workspace, room, "acme/triage", member)
+      {:ok, binding, offer} =
+        WardrikChannel.Rooms.chose(workspace, room: room, agent: "acme/triage", by: member)
 
       # Answer every message, not only mentions
       {:ok, binding} = WardrikChannel.Rooms.answers(workspace, room, :everything, member)
@@ -67,10 +68,21 @@ defmodule WardrikChannel.Rooms do
     end
   end
 
-  @doc "Binds `room` to `agent`, answering when mentioned. Returns `{:error, :not_offered}` if the workspace doesn't offer it."
-  @spec chose(Workspace.t(), String.t(), String.t(), Member.t() | nil) ::
+  @doc """
+  Binds `:room` to `:agent`, answering when mentioned. Returns `{:error, :not_offered}` if the
+  workspace doesn't offer it.
+
+    * `:room` - the room. Required.
+    * `:agent` - the agent's ID. Required.
+    * `:by` - the `WardrikChannel.Member` who chose, or `nil` if the adapter doesn't know.
+  """
+  @spec chose(Workspace.t(), room: String.t(), agent: String.t(), by: Member.t() | nil) ::
           {:ok, Binding.t(), Offer.t()} | {:error, :not_offered}
-  def chose(workspace, room, agent, by \\ nil) do
+  def chose(workspace, opts) do
+    room = Keyword.fetch!(opts, :room)
+    agent = Keyword.fetch!(opts, :agent)
+    by = Keyword.get(opts, :by)
+
     case Enum.find(Workspace.offered(workspace), &(&1.agent == agent)) do
       %Offer{} = offer -> {:ok, bind(workspace, room, agent, :mentions, by), offer}
       nil -> {:error, :not_offered}
@@ -101,15 +113,23 @@ defmodule WardrikChannel.Rooms do
     end
   end
 
-  @doc "Returns whether the room's agent has answered in `thread`."
-  @spec started?(Workspace.t(), String.t(), String.t()) :: boolean()
-  def started?(workspace, room, thread),
-    do: WardrikStore.get(store(workspace), thread_key(workspace, room, thread)) != nil
+  @doc """
+  Returns whether `:room`'s agent has answered in `:thread`.
 
-  @doc "Marks `thread` as one the room's agent answers in."
-  @spec start(Workspace.t(), String.t(), String.t()) :: :ok
-  def start(workspace, room, thread) do
-    {:ok, _vsn} = WardrikStore.put(store(workspace), thread_key(workspace, room, thread), true)
+      WardrikChannel.Rooms.started?(workspace, room: "C024BE91L", thread: "1696.1234")
+  """
+  @spec started?(Workspace.t(), room: String.t(), thread: String.t()) :: boolean()
+  def started?(workspace, opts),
+    do: WardrikStore.get(store(workspace), thread_key(workspace, opts)) != nil
+
+  @doc """
+  Marks `:thread` as one `:room`'s agent answers in.
+
+      :ok = WardrikChannel.Rooms.start(workspace, room: "C024BE91L", thread: "1696.1234")
+  """
+  @spec start(Workspace.t(), room: String.t(), thread: String.t()) :: :ok
+  def start(workspace, opts) do
+    {:ok, _vsn} = WardrikStore.put(store(workspace), thread_key(workspace, opts), true)
     :ok
   end
 
@@ -138,8 +158,10 @@ defmodule WardrikChannel.Rooms do
 
   defp key(workspace, room), do: "rooms/" <> place(workspace, room)
 
-  defp thread_key(workspace, room, thread),
-    do: "threads/" <> place(workspace, room) <> "/" <> thread
+  defp thread_key(workspace, opts) do
+    room = Keyword.fetch!(opts, :room)
+    "threads/" <> place(workspace, room) <> "/" <> Keyword.fetch!(opts, :thread)
+  end
 
   defp place(%Workspace{channel: channel, installation: installation}, room),
     do: Enum.join([channel.name, installation.workspace, room], "/")

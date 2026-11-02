@@ -32,14 +32,14 @@ defmodule WardrikChannel do
   ## Writing an adapter
 
   An adapter is a package, such as `wardrik_slack`, that does `use WardrikChannel`. It implements
-  `c:deliver/2` and `c:include?/4`, and `c:Wardrik.Channel.request/2` to take what the chat app
-  sends:
+  `c:deliver/2` and `c:include?/2`, and `c:Wardrik.Channel.request/2` to take what the chat app
+  sends. Each callback takes what it acts on, then the `WardrikChannel.Channel`:
 
       defmodule MyChat do
         use WardrikChannel
 
         @impl Wardrik.Channel
-        def request(opts, %{path: "events", body: body}) do
+        def request(%{path: "events", body: body}, opts) do
           channel = WardrikChannel.channel(__MODULE__, opts)
           event = JSON.decode!(body)
 
@@ -57,63 +57,55 @@ defmodule WardrikChannel do
         end
 
         @impl WardrikChannel
-        def deliver(channel, %WardrikChannel.Outbound{} = outbound) do
+        def deliver(%WardrikChannel.Outbound{} = outbound, channel) do
           # Post outbound.body in outbound.room, in outbound.thread
           :ok
         end
 
         @impl WardrikChannel
-        def include?(_channel, _installation, names, member), do: member.id in names
+        def include?(%WardrikChannel.Membership{names: names, member: member}, _channel),
+          do: member.id in names
       end
 
-  Hand each button press to `decide/4`. `use WardrikChannel` defines `child_spec/1`,
+  Hand each button press to `decide/2`. `use WardrikChannel` defines `child_spec/1`,
   `c:children/1` and `c:Wardrik.Channel.notify/4`. Each can be overridden.
   """
 
   alias Wardrik.Channel.Installation
   alias Wardrik.Error
+  alias WardrikChannel.Answer
   alias WardrikChannel.Binding
   alias WardrikChannel.Channel
   alias WardrikChannel.Inbound
-  alias WardrikChannel.Member
   alias WardrikChannel.Outbound
   alias WardrikChannel.Replies
   alias WardrikChannel.Rooms
   alias WardrikChannel.Workspace
 
   @doc "Posts `outbound` in its thread. Returning an error has it tried again later."
-  @callback deliver(Channel.t(), Outbound.t()) :: :ok | {:error, term()}
+  @callback deliver(Outbound.t(), Channel.t()) :: :ok | {:error, term()}
 
-  @doc "Returns whether `member` is one of `names`, as the chat app names people, such as `@maria`."
-  @callback include?(Channel.t(), Installation.t(), names :: [String.t()], Member.t()) ::
-              boolean()
+  @doc "Returns whether the member is one of the names, as the chat app names people, such as `@maria`."
+  @callback include?(WardrikChannel.Membership.t(), Channel.t()) :: boolean()
 
   @doc "Returns extra children to run, such as a connection to the chat app. `[]` by default."
   @callback children(Channel.t()) :: [Supervisor.child_spec() | {module(), term()}]
 
-  @doc """
-  Returns the URL where someone acting for `owner` adds the chat app to their workspace.
-
-  ## Options
-
-    * `:return_to` - where they're sent once it's added.
-  """
-  @callback install_url(Channel.t(), owner :: String.t(), keyword()) ::
+  @doc "Returns the URL where someone acting for the install's owner adds the chat app to their workspace."
+  @callback install_url(WardrikChannel.Install.t(), Channel.t()) ::
               {:ok, String.t()} | {:error, String.t()}
 
   @doc """
-  Finishes adding the chat app to a workspace, for `owner`.
-
-  `query` is the query string the chat app redirected back with. Returns the installation and
-  where to send the person next.
+  Finishes adding the chat app to a workspace, for the install's owner, from its `query`.
+  Returns the installation and where to send the person next.
   """
-  @callback installed(Channel.t(), owner :: String.t(), query :: map()) ::
+  @callback installed(WardrikChannel.Install.t(), Channel.t()) ::
               {:ok, Installation.t(), String.t() | nil} | {:error, String.t()}
 
   @doc "Removes the chat app from `workspace`, where the chat app allows it, and forgets the workspace."
-  @callback uninstall(Channel.t(), workspace :: String.t()) :: :ok | {:error, String.t()}
+  @callback uninstall(workspace :: String.t(), Channel.t()) :: :ok | {:error, String.t()}
 
-  @optional_callbacks install_url: 3, installed: 3, uninstall: 2
+  @optional_callbacks install_url: 2, installed: 2, uninstall: 2
 
   defmacro __using__(_opts) do
     quote do
@@ -133,33 +125,39 @@ defmodule WardrikChannel do
       def children(_channel), do: []
 
       @impl Wardrik.Channel
-      def notify(opts, room, notice, approvers),
-        do: WardrikChannel.notify(__MODULE__, opts, room, notice, approvers)
+      def notify(notification, opts), do: WardrikChannel.notify(__MODULE__, notification, opts)
 
-      defoverridable child_spec: 1, children: 1, notify: 4
+      defoverridable child_spec: 1, children: 1, notify: 2
     end
   end
 
   @doc """
-  Posts `notice` in `room`, asking `approvers`. See `c:Wardrik.Channel.notify/4`.
+  Posts a `Wardrik.Channel.Notification` through `adapter`. See `c:Wardrik.Channel.notify/2`.
 
   Posts in the workspace of the agent's owner. That is the owning user's workspace if the channel
   is added to one, else the org's. Returns `{:skip, why}` if it's added to neither.
   """
-  @spec notify(module(), keyword(), String.t(), Wardrik.Notice.t(), [String.t()]) ::
+  @spec notify(module(), Wardrik.Channel.Notification.t(), keyword()) ::
           :ok | {:skip, String.t()} | {:error, term()}
-  def notify(adapter, opts, room, notice, approvers) do
+  def notify(
+        adapter,
+        %Wardrik.Channel.Notification{room: room, notice: notice, approvers: approvers},
+        opts
+      ) do
     channel = Channel.new(adapter, opts)
 
     case Channel.nearest(channel, notice.agent) do
       {:ok, installation} ->
-        adapter.deliver(channel, %Outbound{
-          installation: installation,
-          room: room,
-          thread: nil,
-          body: {:notice, notice},
-          approvers: approvers
-        })
+        adapter.deliver(
+          %Outbound{
+            installation: installation,
+            room: room,
+            thread: nil,
+            body: {:notice, notice},
+            approvers: approvers
+          },
+          channel
+        )
 
       :error ->
         {:skip, "but #{channel.name} isn't added to a workspace of its owner's"}
@@ -205,18 +203,18 @@ defmodule WardrikChannel do
   defp answers?(_workspace, _binding, %Inbound{thread: nil}, _thread), do: false
 
   defp answers?(workspace, binding, _inbound, thread),
-    do: Rooms.started?(workspace, binding.room, thread)
+    do: Rooms.started?(workspace, room: binding.room, thread: thread)
 
   defp ask(workspace, %Binding{room: room, agent: agent}, inbound, thread) do
-    conversation = Workspace.conversation(workspace, agent, room, thread)
+    conversation = Workspace.conversation(workspace, agent: agent, room: room, thread: thread)
     scope = Workspace.member_scope(workspace, inbound.sender)
 
-    with :ok <- Rooms.start(workspace, room, thread),
+    with :ok <- Rooms.start(workspace, room: room, thread: thread),
          :ok <- Replies.follow(workspace, room),
          waiting? = waiting?(workspace, conversation),
          {:ok, _message} <-
            Wardrik.Agent.ask(scope, conversation, content: inbound.text, id: inbound.id) do
-      if waiting?, do: Replies.remind(workspace, room, conversation)
+      if waiting?, do: Replies.remind(workspace, room: room, conversation: conversation)
       {:asked, conversation}
     else
       {:error, %Error{message: message}} -> {:error, message}
@@ -231,34 +229,30 @@ defmodule WardrikChannel do
   end
 
   @doc """
-  Approves or denies a call the agent waits on, as `member`.
+  Approves or denies a call the agent waits on, as `answer`'s member.
 
-      waiting = %{conversation: conversation, interrupt: "int_1", asked_by: nil}
-      WardrikChannel.decide(workspace, member, waiting, {:approve, "Looks fine."})
+      WardrikChannel.decide(workspace, %WardrikChannel.Answer{
+        member: member,
+        conversation: conversation,
+        interrupt: "int_1",
+        decision: {:approve, "Looks fine."}
+      })
       #=> {:ok, %Wardrik.Decision{}}
 
-  `waiting` is what the adapter put on the button, from a `WardrikChannel.Waiting`:
-
-    * `:conversation` - the conversation's ID.
-    * `:interrupt` - the interrupt's ID.
-    * `:asked_by` - who asked for the turn. Optional.
-
-  `answer` is `{:approve, note}` or `{:deny, reason}`. Either may be `nil`.
+  Build the `WardrikChannel.Answer` from what the adapter put on the button, from a
+  `WardrikChannel.Waiting`.
 
   Approvers may decide, and so may whoever asked. Anyone else gets `{:error, deciding}`, the
   channel's `:deciding` message.
   """
-  @spec decide(Workspace.t(), Member.t(), map(), {:approve | :deny, String.t() | nil}) ::
-          {:ok, Wardrik.Decision.t()} | {:error, String.t()}
+  @spec decide(Workspace.t(), Answer.t()) :: {:ok, Wardrik.Decision.t()} | {:error, String.t()}
   def decide(
         workspace,
-        member,
-        %{conversation: conversation, interrupt: interrupt} = waiting,
-        answer
+        %Answer{conversation: conversation, interrupt: interrupt, decision: decision} = answer
       ) do
-    scope = Workspace.deciding_scope(workspace, member, conversation, Map.get(waiting, :asked_by))
+    scope = Workspace.deciding_scope(workspace, answer)
 
-    case answered(scope, conversation, interrupt, answer) do
+    case answered(scope, conversation, interrupt, decision) do
       {:ok, [decision]} ->
         {:ok, decision}
 
@@ -271,10 +265,18 @@ defmodule WardrikChannel do
   end
 
   defp answered(scope, conversation, interrupt, {:approve, note}),
-    do: Wardrik.Agent.approve(scope, conversation, interrupt, given(:note, note))
+    do:
+      Wardrik.Agent.approve(
+        scope,
+        [agent: conversation, interrupt: interrupt] ++ given(:note, note)
+      )
 
   defp answered(scope, conversation, interrupt, {:deny, reason}),
-    do: Wardrik.Agent.deny(scope, conversation, interrupt, given(:reason, reason))
+    do:
+      Wardrik.Agent.deny(
+        scope,
+        [agent: conversation, interrupt: interrupt] ++ given(:reason, reason)
+      )
 
   defp given(_key, nil), do: []
   defp given(key, value), do: [{key, value}]

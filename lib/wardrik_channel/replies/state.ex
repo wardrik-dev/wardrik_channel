@@ -70,9 +70,14 @@ defmodule WardrikChannel.Replies.State do
   def take(state, conversation, %Wardrik.Event{type: "wardrik." <> type, data: data}),
     do: taken(state, conversation, type, data)
 
-  @doc "Returns the arguments of call `id` in `conversation`, or `nil` if unknown."
-  @spec arguments(t(), String.t(), String.t() | nil) :: term()
-  def arguments(state, conversation, id), do: get_in(state.calls, [conversation, id])
+  @doc """
+  Returns the arguments of `:call` in `:conversation`, or `nil` if unknown.
+
+      State.arguments(state, conversation: conversation, call: "call_1")
+  """
+  @spec arguments(t(), conversation: String.t(), call: String.t() | nil) :: term()
+  def arguments(state, opts),
+    do: get_in(state.calls, [Keyword.fetch!(opts, :conversation), Keyword.fetch!(opts, :call)])
 
   @doc "Returns who asked for the run under way in `conversation`, or `nil` if unknown."
   @spec asked_by(t(), String.t()) :: String.t() | nil

@@ -39,9 +39,16 @@ defmodule WardrikChannel.Replies do
     :ok
   end
 
-  @doc "Posts the calls `conversation` waits on again, in its thread of `room`."
-  @spec remind(Workspace.t(), String.t(), String.t()) :: :ok
-  def remind(%Workspace{channel: channel} = workspace, room, conversation) do
+  @doc """
+  Posts the calls `:conversation` waits on again, in its thread of `:room`.
+
+      WardrikChannel.Replies.remind(workspace, room: "C024BE91L", conversation: conversation)
+  """
+  @spec remind(Workspace.t(), room: String.t(), conversation: String.t()) :: :ok
+  def remind(%Workspace{channel: channel} = workspace, opts) do
+    room = Keyword.fetch!(opts, :room)
+    conversation = Keyword.fetch!(opts, :conversation)
+
     case DurableServer.Supervisor.lookup(supervisor(channel), key(workspace, room)) do
       {pid, _meta} -> GenServer.cast(pid, {:remind, conversation})
       nil -> :ok
