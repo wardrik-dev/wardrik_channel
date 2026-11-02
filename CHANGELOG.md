@@ -9,6 +9,10 @@
 
 ### Breaking
 
+- `WardrikChannel` callbacks take what they act on, then the `WardrikChannel.Channel`:
+  `deliver/2` the outbound, `include?/2` a `WardrikChannel.Membership`, `install_url/2` and
+  `installed/2` a `WardrikChannel.Install`, and `uninstall/2` the workspace. The installation
+  stores implement `Wardrik.Channel.Installations` rc.2.
 - An install's token is sealed as a `:token`, and read only as one.
 - `WardrikChannel.Channel.new/2` raises `NimbleOptions.ValidationError` on an invalid option.
 

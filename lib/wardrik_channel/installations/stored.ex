@@ -12,10 +12,11 @@ defmodule WardrikChannel.Installations.Stored do
   @behaviour Wardrik.Channel.Installations
 
   alias Wardrik.Channel.Installation
+  alias Wardrik.Channel.Installations.Request
   alias WardrikCore.Principal
 
   @impl Wardrik.Channel.Installations
-  def fetch(config, channel, workspace) do
+  def fetch(%Request{channel: channel, workspace: workspace}, config) do
     with %{"owner" => owner, "approvers" => approvers} <-
            WardrikStore.get(store(config), key(channel, workspace)),
          {:ok, token} <- sealed(config, owner, secret(channel, workspace)) do
@@ -33,20 +34,25 @@ defmodule WardrikChannel.Installations.Stored do
   end
 
   @impl Wardrik.Channel.Installations
-  def owned(config, channel, owner) do
+  def owned(%Request{channel: channel, owner: owner}, config) do
     prefix = key(channel, "")
     store = store(config)
 
     for key <- WardrikStore.keys(store, prefix),
         %{"owner" => ^owner} <- [WardrikStore.get(store, key)],
-        {:ok, installation} <- [fetch(config, channel, String.replace_prefix(key, prefix, ""))],
+        {:ok, installation} <- [
+          fetch(
+            %Request{channel: channel, workspace: String.replace_prefix(key, prefix, "")},
+            config
+          )
+        ],
         do: installation
   end
 
   @impl Wardrik.Channel.Installations
   def put(
-        config,
-        %Installation{channel: channel, workspace: workspace, owner: owner} = installation
+        %Installation{channel: channel, workspace: workspace, owner: owner} = installation,
+        config
       ) do
     kept = %{"owner" => owner, "approvers" => kept_approvers(installation.approvers)}
 
@@ -59,7 +65,7 @@ defmodule WardrikChannel.Installations.Stored do
   end
 
   @impl Wardrik.Channel.Installations
-  def delete(config, channel, workspace) do
+  def delete(%Request{channel: channel, workspace: workspace}, config) do
     case WardrikStore.get(store(config), key(channel, workspace)) do
       %{"owner" => owner} ->
         :ok = unseal(config, owner, secret(channel, workspace))

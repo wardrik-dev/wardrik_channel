@@ -94,7 +94,15 @@ defmodule WardrikChannel.Workspace do
   def approver?(%__MODULE__{installation: %Installation{approvers: []}}, _member), do: false
 
   def approver?(%__MODULE__{channel: channel, installation: installation}, member),
-    do: channel.adapter.include?(channel, installation, installation.approvers, member)
+    do:
+      channel.adapter.include?(
+        %WardrikChannel.Membership{
+          installation: installation,
+          names: installation.approvers,
+          member: member
+        },
+        channel
+      )
 
   @doc "Returns the agents that may answer in the workspace's rooms, sorted by ID."
   @spec offered(t()) :: [Offer.t()]

@@ -188,7 +188,7 @@ defmodule WardrikChannel.Replies.Server do
           approvers: installation.approvers
         }
 
-        channel.adapter.deliver(channel, outbound)
+        channel.adapter.deliver(outbound, channel)
 
       :error ->
         :ok

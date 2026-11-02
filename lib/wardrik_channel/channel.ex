@@ -13,6 +13,7 @@ defmodule WardrikChannel.Channel do
   """
 
   alias Wardrik.Channel.Installation
+  alias Wardrik.Channel.Installations.Request
   alias WardrikChannel.Installations.Stored
   alias WardrikChannel.Installations.Token
 
@@ -119,7 +120,7 @@ defmodule WardrikChannel.Channel do
   @doc "Returns the channel's installation in `workspace`, as the chat app names it."
   @spec installation(t(), String.t()) :: {:ok, Installation.t()} | :error
   def installation(%__MODULE__{name: name, installations: {module, config}}, workspace),
-    do: module.fetch(config, name, workspace)
+    do: module.fetch(%Request{channel: name, workspace: workspace}, config)
 
   @doc """
   Returns the installation nearest the owner of agent `id`.
@@ -132,7 +133,7 @@ defmodule WardrikChannel.Channel do
     {:ok, %Wardrik.AgentID{owner: owner}} = Wardrik.AgentID.parse(id)
     owners = List.delete(Wardrik.Owners.chain(owner), Wardrik.Resource.deployment())
 
-    case Enum.flat_map(owners, &module.owned(config, name, &1)) do
+    case Enum.flat_map(owners, &module.owned(%Request{channel: name, owner: &1}, config)) do
       [installation | _rest] -> {:ok, installation}
       [] -> :error
     end
@@ -141,12 +142,12 @@ defmodule WardrikChannel.Channel do
   @doc "Saves `installation`, replacing any for the same workspace."
   @spec install(t(), Installation.t()) :: :ok | {:error, String.t()}
   def install(%__MODULE__{installations: {module, config}}, installation),
-    do: module.put(config, installation)
+    do: module.put(installation, config)
 
   @doc "Forgets the channel's installation in `workspace`."
   @spec uninstall(t(), String.t()) :: :ok
   def uninstall(%__MODULE__{name: name, installations: {module, config}}, workspace),
-    do: module.delete(config, name, workspace)
+    do: module.delete(%Request{channel: name, workspace: workspace}, config)
 
   defp named!(name) do
     if not Regex.match?(~r/^[a-z][a-z0-9-]*$/, name),

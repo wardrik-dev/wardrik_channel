@@ -277,8 +277,12 @@ defmodule WardrikChannelTest do
 
       assert installation.owner == "acme"
       refute inspect(installation) =~ "xoxb"
-      assert {:error, _why} = module.put(config, installation)
-      assert module.delete(config, channel.name, "T9") == :ok
+      assert {:error, _why} = module.put(installation, config)
+
+      assert module.delete(
+               %Wardrik.Channel.Installations.Request{channel: channel.name, workspace: "T9"},
+               config
+             ) == :ok
     end
   end
 
@@ -293,7 +297,13 @@ defmodule WardrikChannelTest do
 
       opts = channel_options(context)
 
-      assert WardrikChannel.Test.Chat.notify(opts, "#news", notice, ["@maria"]) == :ok
+      notification = %Wardrik.Channel.Notification{
+        room: "#news",
+        notice: notice,
+        approvers: ["@maria"]
+      }
+
+      assert WardrikChannel.Test.Chat.notify(notification, opts) == :ok
 
       assert_receive {:delivered,
                       %Outbound{
@@ -308,10 +318,11 @@ defmodule WardrikChannelTest do
 
       assert {:skip, _why} =
                WardrikChannel.Test.Chat.notify(
-                 opts,
-                 "#news",
-                 %{notice | agent: "globex/digest"},
-                 []
+                 %Wardrik.Channel.Notification{
+                   room: "#news",
+                   notice: %{notice | agent: "globex/digest"}
+                 },
+                 opts
                )
     end
 
