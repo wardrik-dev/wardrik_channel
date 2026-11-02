@@ -265,10 +265,18 @@ defmodule WardrikChannel do
   end
 
   defp answered(scope, conversation, interrupt, {:approve, note}),
-    do: Wardrik.Agent.approve(scope, conversation, interrupt, given(:note, note))
+    do:
+      Wardrik.Agent.approve(
+        scope,
+        [agent: conversation, interrupt: interrupt] ++ given(:note, note)
+      )
 
   defp answered(scope, conversation, interrupt, {:deny, reason}),
-    do: Wardrik.Agent.deny(scope, conversation, interrupt, given(:reason, reason))
+    do:
+      Wardrik.Agent.deny(
+        scope,
+        [agent: conversation, interrupt: interrupt] ++ given(:reason, reason)
+      )
 
   defp given(_key, nil), do: []
   defp given(key, value), do: [{key, value}]
